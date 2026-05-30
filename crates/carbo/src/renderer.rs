@@ -122,12 +122,18 @@ impl Renderer {
         match cmd {
           // don't render yet, just store the frame input
           RendererCommand::FrameInput(frame_input) => {
+            if pending_frame.is_some() {
+              tracing::info!("coalesced frame input");
+            }
             pending_frame = Some(frame_input);
           }
           RendererCommand::ChangedScaleFactor(new_scale_factor) => {
             self.current_scale_factor = new_scale_factor;
           }
           RendererCommand::Resized(physical_width, physical_height) => {
+            if pending_resize.is_some() {
+              tracing::info!("coalesced resize event");
+            }
             pending_resize = Some((physical_width, physical_height));
           }
         }
