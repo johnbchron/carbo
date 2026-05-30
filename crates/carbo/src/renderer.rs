@@ -112,6 +112,8 @@ impl Renderer {
     while let Ok(first) = self.renderer_command_rx.recv() {
       // the frame we'll draw
       let mut pending_frame = None;
+      // the latest resize seen during the drain; applied once after the loop
+      let mut pending_resize = None;
       // the next command to execute
       let mut command = Some(first);
 
@@ -126,16 +128,21 @@ impl Renderer {
             self.current_scale_factor = new_scale_factor;
           }
           RendererCommand::Resized(physical_width, physical_height) => {
-            self.surface_state.resize_surface(
-              self.gpu.device(),
-              physical_width,
-              physical_height,
-            );
+            pending_resize = Some((physical_width, physical_height));
           }
         }
 
         // get the next command if there is one
         command = self.renderer_command_rx.try_recv().ok();
+      }
+
+      // apply the latest resize once, after the drain
+      if let Some((physical_width, physical_height)) = pending_resize {
+        self.surface_state.resize_surface(
+          self.gpu.device(),
+          physical_width,
+          physical_height,
+        );
       }
 
       // render when there are no more commands waiting
