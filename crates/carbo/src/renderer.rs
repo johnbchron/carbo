@@ -213,11 +213,12 @@ impl Renderer {
         depth_or_array_layers: 1,
       },
     );
-    // submit all the work to the GPU
+
+    // hint the window and submit all the work to the GPU
+    self.window.pre_present_notify();
     self.gpu.queue().submit([encoder.finish()]);
 
     // present the frame
-    self.window.pre_present_notify();
     surface_tex.present();
 
     self.current_frame_count += 1;
