@@ -6,7 +6,7 @@ use std::{
   time::{Duration, Instant},
 };
 
-use tracing::{debug, info, warn};
+use tracing::{debug, info, info_span, instrument, warn};
 use winit::{self, dpi::PhysicalSize, event::WindowEvent};
 
 pub use self::state::AppState;
@@ -60,6 +60,8 @@ impl App {
   pub fn run(&mut self) -> miette::Result<()> {
     while let Ok(event) = self.event_rx.recv() {
       let start = Instant::now();
+      let _span = info_span!("event_dispatch", event = ?event).entered();
+
       match event {
         // mainline event loop control flow
         Event::Windowing(box WindowingEvent::EventLoop(

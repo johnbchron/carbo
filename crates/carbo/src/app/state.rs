@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use miette::Context;
+use tracing::instrument;
 
 use crate::{gpu_context::GpuContext, window_handle::WindowHandle};
 
@@ -10,6 +11,7 @@ pub struct AppState {
 }
 
 impl AppState {
+  #[instrument]
   pub fn build() -> miette::Result<Self> {
     Ok(AppState {
       gpu:    Arc::new(

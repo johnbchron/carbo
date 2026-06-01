@@ -1,3 +1,4 @@
+use tracing::instrument;
 use wgpu::{
   Backends, Device, DeviceDescriptor, Instance, Queue, RequestAdapterOptions,
 };
@@ -13,6 +14,7 @@ pub struct GpuContext {
 
 impl GpuContext {
   /// Constructs and provisions all the resources needed in [`GpuContext`].
+  #[instrument]
   pub fn new() -> miette::Result<Self> {
     // no support for GL
     let instance_descriptor = wgpu::InstanceDescriptor {

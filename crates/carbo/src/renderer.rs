@@ -4,6 +4,7 @@ use std::{
 };
 
 use miette::{Context, IntoDiagnostic};
+use tracing::{info_span, instrument};
 use vello::peniko::color::palette;
 use wgpu::CommandEncoderDescriptor;
 use winit::{dpi::PhysicalSize, window::Window};
@@ -110,6 +111,7 @@ impl Renderer {
   fn run(&mut self) -> miette::Result<()> {
     // receive the first available message
     while let Ok(first) = self.renderer_command_rx.recv() {
+      let _span = info_span!("command_dispatch").entered();
       // the frame we'll draw
       let mut pending_frame = None;
       // the latest resize seen during the drain; applied once after the loop
@@ -161,6 +163,7 @@ impl Renderer {
   }
 
   /// Renders and presents a frame.
+  #[instrument(skip_all)]
   fn render_frame(&mut self, frame_input: FrameInput) -> Result<(), SkipFrame> {
     let width = self.surface_state.config_width();
     let height = self.surface_state.config_height();
@@ -175,25 +178,29 @@ impl Renderer {
 
     // draw into the scene
     let scene = &mut self.cached_scene;
-    scene.reset();
-    full_frame_input.draw_to_scene(scene);
+    info_span!("draw_scene").in_scope(|| {
+      scene.reset();
+      full_frame_input.draw_to_scene(scene);
+    });
 
     // render the scene to the target texture
-    self
-      .renderer
-      .render_to_texture(
-        self.gpu.device(),
-        self.gpu.queue(),
-        scene,
-        self.surface_state.get_target_texture_view(),
-        &vello::RenderParams {
-          base_color: palette::css::BLACK,
-          width,
-          height,
-          antialiasing_method: vello::AaConfig::Area,
-        },
-      )
-      .expect("vello render failed");
+    info_span!("vello_render").in_scope(|| {
+      self
+        .renderer
+        .render_to_texture(
+          self.gpu.device(),
+          self.gpu.queue(),
+          scene,
+          self.surface_state.get_target_texture_view(),
+          &vello::RenderParams {
+            base_color: palette::css::BLACK,
+            width,
+            height,
+            antialiasing_method: vello::AaConfig::Area,
+          },
+        )
+        .expect("vello render failed");
+    });
 
     // prepare to blit from the target view to the surface
     let mut encoder = self
@@ -201,22 +208,29 @@ impl Renderer {
       .device()
       .create_command_encoder(&CommandEncoderDescriptor::default());
 
-    let surface_tex = self.surface_state.get_current_surface_texture()?;
+    let surface_tex = info_span!("get_surface_tex")
+      .in_scope(|| self.surface_state.get_current_surface_texture())?;
 
     // queue the blit op
-    encoder.copy_texture_to_texture(
-      self.surface_state.get_target_texture().as_image_copy(),
-      surface_tex.texture.as_image_copy(),
-      wgpu::Extent3d {
-        width,
-        height,
-        depth_or_array_layers: 1,
-      },
-    );
+    info_span!("encode").in_scope(|| {
+      encoder.copy_texture_to_texture(
+        self.surface_state.get_target_texture().as_image_copy(),
+        surface_tex.texture.as_image_copy(),
+        wgpu::Extent3d {
+          width,
+          height,
+          depth_or_array_layers: 1,
+        },
+      );
+    });
 
     // hint the window and submit all the work to the GPU
-    self.window.pre_present_notify();
-    self.gpu.queue().submit([encoder.finish()]);
+    info_span!("pre_present_notify").in_scope(|| {
+      self.window.pre_present_notify();
+    });
+    info_span!("submit_to_queue").in_scope(|| {
+      self.gpu.queue().submit([encoder.finish()]);
+    });
 
     // present the frame
     surface_tex.present();

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use tracing::{info_span, instrument};
 use wgpu::{
   Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureDescriptor,
   TextureDimension, TextureFormat, TextureUsages, TextureView,
@@ -81,26 +82,34 @@ impl SurfaceState {
   }
 
   /// Reconfigures the surface with the current config.
+  #[instrument(skip_all)]
   pub fn reconfigure_surface(&mut self, device: &wgpu::Device) {
-    self.surface.configure(device, &self.surface_config);
+    info_span!("surface_configure").in_scope(|| {
+      self.surface.configure(device, &self.surface_config);
+    });
 
-    let target_texture = self.gpu.device().create_texture(&TextureDescriptor {
-      label:           Some("vello target"),
-      size:            wgpu::Extent3d {
-        width:                 self.config_width(),
-        height:                self.config_height(),
-        depth_or_array_layers: 1,
-      },
-      mip_level_count: 1,
-      sample_count:    1,
-      dimension:       TextureDimension::D2,
-      format:          self.config_format(),
-      usage:           TextureUsages::STORAGE_BINDING | TextureUsages::COPY_SRC,
-      view_formats:    &[],
+    let target_texture = info_span!("create_target_texture").in_scope(|| {
+      self.gpu.device().create_texture(&TextureDescriptor {
+        label:           Some("vello target"),
+        size:            wgpu::Extent3d {
+          width:                 self.config_width(),
+          height:                self.config_height(),
+          depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count:    1,
+        dimension:       TextureDimension::D2,
+        format:          self.config_format(),
+        usage:           TextureUsages::STORAGE_BINDING
+          | TextureUsages::COPY_SRC,
+        view_formats:    &[],
+      })
     });
 
     self.target_view =
-      target_texture.create_view(&TextureViewDescriptor::default());
+      info_span!("create_target_texture_view").in_scope(|| {
+        target_texture.create_view(&TextureViewDescriptor::default())
+      });
     self.target_texture = target_texture;
   }
 

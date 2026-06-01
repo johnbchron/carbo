@@ -19,6 +19,10 @@ use tracing_subscriber::{
 };
 
 fn main() -> miette::Result<()> {
+  let perfetto = tracing_perfetto::PerfettoLayer::new(std::sync::Mutex::new(
+    std::fs::File::create("/tmp/carbo.pftrace").unwrap(),
+  ))
+  .with_debug_annotations(true);
   tracing_subscriber::registry()
     .with(tracing_subscriber::fmt::layer())
     .with(
@@ -26,6 +30,7 @@ fn main() -> miette::Result<()> {
         .with_default_directive(LevelFilter::INFO.into())
         .from_env_lossy(),
     )
+    .with(perfetto)
     .try_init()
     .into_diagnostic()?;
 

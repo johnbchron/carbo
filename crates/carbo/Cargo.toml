@@ -9,6 +9,7 @@ miette = { version = "7.6" }
 pollster = { version = "0.4" }
 portable-pty = { version = "0.9" }
 tracing = { version = "0.1" }
+tracing-perfetto = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = [ "env-filter" ] }
 vello = { version = "0.8" }
 wgpu = { version = "28" }
