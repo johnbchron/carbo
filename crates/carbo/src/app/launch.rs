@@ -31,6 +31,7 @@ impl App {
 
     // build the main app
     let app = App {
+      event_loopback: event_tx.clone(),
       event_rx,
       state,
       command_tx,

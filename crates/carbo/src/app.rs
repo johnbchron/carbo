@@ -10,6 +10,7 @@ pub use self::state::AppState;
 use crate::{
   draw::FrameInput,
   event::{Event, WindowingEvent, WinitEventLoopEvent},
+  event_sender::EventSender,
   executor::{Command, EventLoopCommand},
   window_handle::WindowHandle,
 };
@@ -41,9 +42,10 @@ use crate::{
 /// - The [`WinitApp`] builds the window, and sends it back as the
 ///   [`WindowingEvent::WindowBuilt`].
 pub struct App {
-  event_rx:   mpsc::Receiver<Event>,
-  state:      state::AppState,
-  command_tx: mpsc::Sender<Command>,
+  event_loopback: EventSender,
+  event_rx:       mpsc::Receiver<Event>,
+  state:          state::AppState,
+  command_tx:     mpsc::Sender<Command>,
 }
 
 impl App {
@@ -63,14 +65,14 @@ impl App {
         Event::Windowing(box WindowingEvent::EventLoop(
           WinitEventLoopEvent::Resumed,
         )) => {
-          debug!("received resumed event => building window");
+          debug!("received winit resumed event => building window");
           self
             .command(Command::EventLoopCommand(EventLoopCommand::BuildWindow));
         }
         Event::Windowing(box WindowingEvent::EventLoop(
           WinitEventLoopEvent::Suspended,
         )) => {
-          debug!("received suspended event => destroying window");
+          debug!("received winit suspended event => destroying window");
           self.drop_window();
         }
         Event::Windowing(box WindowingEvent::EventLoop(
@@ -106,8 +108,8 @@ impl App {
           _,
           WindowEvent::CloseRequested,
         )) => {
-          self.shut_down_app();
-          return Ok(());
+          debug!("propagating window close request event to app exit");
+          self.event_loopback.event(Event::ExitRequested);
         }
 
         Event::Windowing(box WindowingEvent::Window(_, _window_event)) => {
