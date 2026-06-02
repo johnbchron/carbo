@@ -1,12 +1,9 @@
 mod launch;
 mod state;
 
-use std::{
-  sync::mpsc,
-  time::{Duration, Instant},
-};
+use std::sync::mpsc;
 
-use tracing::{debug, info, info_span, instrument, warn};
+use tracing::{debug, info, info_span};
 use winit::{self, dpi::PhysicalSize, event::WindowEvent};
 
 pub use self::state::AppState;
@@ -59,7 +56,6 @@ impl App {
   /// Run the app event loop.
   pub fn run(&mut self) -> miette::Result<()> {
     while let Ok(event) = self.event_rx.recv() {
-      let start = Instant::now();
       let _span = info_span!("event_dispatch", event = ?event).entered();
 
       match event {
@@ -143,14 +139,6 @@ impl App {
           self.shut_down_app();
           return Err(report);
         }
-      }
-
-      let elapsed = start.elapsed();
-      if elapsed > Duration::from_micros(20) {
-        warn!(
-          "slow loop: event loop cycle took {:.03}ms (> 0.020 micros)",
-          start.elapsed().as_millis_f32()
-        );
       }
     }
 
