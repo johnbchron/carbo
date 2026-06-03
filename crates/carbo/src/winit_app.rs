@@ -51,7 +51,8 @@ impl WinitApp {
         let window = Arc::new(event_loop.create_window(attrs).unwrap());
         debug!("built window in {:.02}ms", now.elapsed().as_millis_f32());
 
-        self.event_tx.event(Event::Windowing(Box::new(
+        // app loop may already have exited. avoids a potential panic.
+        let _ = self.event_tx.try_event(Event::Windowing(Box::new(
           WindowingEvent::WindowBuilt(window),
         )));
       }
@@ -92,11 +93,10 @@ impl WinitApp {
 
 impl ApplicationHandler<EventLoopCommand> for WinitApp {
   fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
-    self
-      .event_tx
-      .event(Event::Windowing(Box::new(WindowingEvent::EventLoop(
-        WinitEventLoopEvent::Resumed,
-      ))));
+    // app loop may already have exited. avoids a potential panic.
+    let _ = self.event_tx.try_event(Event::Windowing(Box::new(
+      WindowingEvent::EventLoop(WinitEventLoopEvent::Resumed),
+    )));
   }
 
   fn window_event(
@@ -105,11 +105,10 @@ impl ApplicationHandler<EventLoopCommand> for WinitApp {
     window_id: WindowId,
     event: winit::event::WindowEvent,
   ) {
-    self
-      .event_tx
-      .event(Event::Windowing(Box::new(WindowingEvent::Window(
-        window_id, event,
-      ))));
+    // app loop may already have exited. avoids a potential panic.
+    let _ = self.event_tx.try_event(Event::Windowing(Box::new(
+      WindowingEvent::Window(window_id, event),
+    )));
   }
 
   fn user_event(
@@ -126,19 +125,17 @@ impl ApplicationHandler<EventLoopCommand> for WinitApp {
     device_id: DeviceId,
     event: winit::event::DeviceEvent,
   ) {
-    self
-      .event_tx
-      .event(Event::Windowing(Box::new(WindowingEvent::Device(
-        device_id, event,
-      ))));
+    // app loop may already have exited. avoids a potential panic.
+    let _ = self.event_tx.try_event(Event::Windowing(Box::new(
+      WindowingEvent::Device(device_id, event),
+    )));
   }
 
   fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
-    self
-      .event_tx
-      .event(Event::Windowing(Box::new(WindowingEvent::EventLoop(
-        WinitEventLoopEvent::Suspended,
-      ))));
+    // app loop may already have exited. avoids a potential panic.
+    let _ = self.event_tx.try_event(Event::Windowing(Box::new(
+      WindowingEvent::EventLoop(WinitEventLoopEvent::Suspended),
+    )));
   }
 
   fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
