@@ -128,7 +128,9 @@ impl App {
         }
 
         Event::Windowing(box WindowingEvent::WindowBuilt(window)) => {
-          self.command(Command::SpawnRenderer(window, self.state.gpu.clone()));
+          self.command(Command::EventLoopCommand(
+            EventLoopCommand::SpawnRenderer(window, self.state.gpu.clone()),
+          ));
         }
         Event::RendererSpawned(window_handle) => {
           self.accept_window_handle(window_handle);

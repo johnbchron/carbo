@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Instant};
 
+use miette::Context;
 use tracing::debug;
 use winit::{
   application::ApplicationHandler,
@@ -12,6 +13,9 @@ use winit::{
 use crate::{
   event::{Event, WindowingEvent, WinitEventLoopEvent},
   event_sender::EventSender,
+  executor::EventLoopCommand,
+  renderer::Renderer,
+  window_handle::WindowHandle,
 };
 
 /// The app passed to the [`winit`] event loop.
@@ -36,10 +40,10 @@ impl WinitApp {
   fn run_command(
     &mut self,
     event_loop: &ActiveEventLoop,
-    command: crate::executor::EventLoopCommand,
+    command: EventLoopCommand,
   ) {
     match command {
-      crate::executor::EventLoopCommand::BuildWindow => {
+      EventLoopCommand::BuildWindow => {
         let now = Instant::now();
         let attrs = Window::default_attributes()
           .with_title("carbo")
@@ -51,14 +55,42 @@ impl WinitApp {
           WindowingEvent::WindowBuilt(window),
         )));
       }
-      crate::executor::EventLoopCommand::ExitEventLoop => {
+      EventLoopCommand::ExitEventLoop => {
         event_loop.exit();
+      }
+      EventLoopCommand::SpawnRenderer(window, gpu) => {
+        tracing::debug!(
+          window.id = ?window.id(),
+          "spawning renderer for window"
+        );
+        let now = Instant::now();
+        let result =
+          Renderer::launch(gpu, window.clone(), self.event_tx.clone())
+            .context("failed to launch renderer thread");
+        debug!(
+          "launched renderer in {:.2}ms",
+          now.elapsed().as_millis_f32()
+        );
+
+        match result {
+          Ok(handle) => {
+            self
+              .event_tx
+              .event(Event::RendererSpawned(WindowHandle::new(window, handle)));
+          }
+          Err(error) => {
+            self.event_tx.event(Event::CriticalFailure {
+              message: "failed to spawn a renderer".into(),
+              error,
+            });
+          }
+        }
       }
     }
   }
 }
 
-impl ApplicationHandler<crate::executor::EventLoopCommand> for WinitApp {
+impl ApplicationHandler<EventLoopCommand> for WinitApp {
   fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
     self
       .event_tx
@@ -83,7 +115,7 @@ impl ApplicationHandler<crate::executor::EventLoopCommand> for WinitApp {
   fn user_event(
     &mut self,
     event_loop: &ActiveEventLoop,
-    command: crate::executor::EventLoopCommand,
+    command: EventLoopCommand,
   ) {
     self.run_command(event_loop, command);
   }
