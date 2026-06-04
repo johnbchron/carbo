@@ -1,12 +1,14 @@
 use tracing::instrument;
 use wgpu::{
-  Backends, Device, DeviceDescriptor, Instance, Queue, RequestAdapterOptions,
+  Adapter, Backends, Device, DeviceDescriptor, Instance, Queue,
+  RequestAdapterOptions,
 };
 
 /// Holds long-lived [`wgpu`] GPU resources used in all rendering operations. It
 /// can be constructed once and shared everywhere.
 #[derive(Debug)]
 pub struct GpuContext {
+  adapter:  Adapter,
   queue:    Queue,
   device:   Device,
   instance: Instance,
@@ -23,7 +25,7 @@ impl GpuContext {
     };
     let instance = Instance::new(&instance_descriptor);
 
-    let (device, queue) = pollster::block_on(async {
+    let (adapter, device, queue) = pollster::block_on(async {
       let adapter = instance
         .request_adapter(&RequestAdapterOptions::default())
         .await
@@ -32,15 +34,18 @@ impl GpuContext {
         .request_device(&DeviceDescriptor::default())
         .await
         .expect("failed to create device");
-      (device, queue)
+      (adapter, device, queue)
     });
 
     Ok(Self {
-      instance,
-      device,
+      adapter,
       queue,
+      device,
+      instance,
     })
   }
+
+  pub fn adapter(&self) -> &Adapter { &self.adapter }
 
   pub fn queue(&self) -> &Queue { &self.queue }
 
