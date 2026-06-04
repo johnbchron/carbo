@@ -19,9 +19,14 @@
         extensions = [ "rust-src" "rust-analyzer" ];
       });
 
-      packages = (with pkgs; [
+      common-packages = with pkgs; [
         pkg-config clang mold
 
+        fontconfig
+        ( toolchain_fn pkgs )
+      ];
+
+      linux-packages = with pkgs; [
         alsa-lib udev
 
         libxkbcommon wayland
@@ -31,16 +36,24 @@
         vulkan-tools vulkan-tools-lunarg
         vulkan-extension-layer
         # vulkan-validation-layers
+      ];
 
-        fontconfig
-      ]) ++ [ (toolchain_fn pkgs) ];
-    in {
-      devShell = pkgs.devshell.mkShell {
+      linux-devshell = pkgs.devshell.mkShell (let
+        packages = common-packages ++ linux-packages;
+      in {
         inherit packages;
         motd = "\n  Welcome to the {2}$(basename $PRJ_ROOT){reset} shell.\n";
         env = [
           { name = "LD_LIBRARY_PATH"; value = pkgs.lib.makeLibraryPath packages; }
         ];
-      };
+      });
+      darwin-devshell = pkgs.mkShell (let
+        packages = common-packages ++ [ pkgs.apple-sdk ];
+      in {
+        nativeBuildInputs = packages;
+        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath packages;
+      });
+    in {
+      devShell = if pkgs.stdenv.isLinux then linux-devshell else darwin-devshell;
   });
 }
