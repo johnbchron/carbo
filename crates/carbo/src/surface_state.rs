@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use miette::{Context, IntoDiagnostic};
 use tracing::{info_span, instrument};
 use wgpu::{
   Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureDescriptor,
@@ -25,9 +26,16 @@ pub struct SurfaceState {
 impl SurfaceState {
   /// Constructs a surface with its config, given the [`GpuContext`] and target
   /// [`Window`].
-  pub fn new(gpu: Arc<GpuContext>, window: Arc<Window>) -> Self {
+  pub fn new(
+    gpu: Arc<GpuContext>,
+    window: Arc<Window>,
+  ) -> miette::Result<Self> {
     let size = window.inner_size();
-    let surface = gpu.instance().create_surface(window).unwrap();
+    let surface = gpu
+      .instance()
+      .create_surface(window)
+      .into_diagnostic()
+      .context("failed to create surface from GPU instance")?;
 
     let surface_config = SurfaceConfiguration {
       usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_DST,
@@ -60,13 +68,13 @@ impl SurfaceState {
     let target_view =
       target_texture.create_view(&TextureViewDescriptor::default());
 
-    Self {
+    Ok(Self {
       gpu,
       surface,
       surface_config,
       target_texture,
       target_view,
-    }
+    })
   }
 
   /// Resizes and reconfigures the surface.

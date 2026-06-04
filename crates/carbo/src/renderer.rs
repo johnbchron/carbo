@@ -67,7 +67,8 @@ impl Renderer {
     let (renderer_command_tx, renderer_command_rx) = mpsc::channel();
 
     let current_scale_factor = window.scale_factor();
-    let surface_state = SurfaceState::new(gpu.clone(), window.clone());
+    let surface_state = SurfaceState::new(gpu.clone(), window.clone())
+      .context("failed to create a surface")?;
 
     let renderer = vello::Renderer::new(gpu.device(), vello::RendererOptions {
       use_cpu:              false,

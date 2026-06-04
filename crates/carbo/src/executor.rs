@@ -87,7 +87,7 @@ impl Executor {
           let now = Instant::now();
           let result =
             Renderer::launch(gpu, window.clone(), self.event_tx.clone())
-              .context("failed to launch renderer");
+              .context("failed to launch renderer thread");
           debug!(
             "launched renderer in {:.2}ms",
             now.elapsed().as_millis_f32()
