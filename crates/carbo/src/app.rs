@@ -137,9 +137,20 @@ impl App {
           self.shut_down_app();
           return Ok(());
         }
-        Event::CriticalFailure(report) => {
+        Event::CriticalFailure {
+          message,
+          error: report,
+        } => {
+          tracing::error!(
+            message,
+            "catastrophic error occurred; shutting down app"
+          );
           self.shut_down_app();
-          return Err(report);
+          return Err(
+            report
+              .context(message)
+              .context("catastrophic error occured; shutting down app"),
+          );
         }
       }
     }

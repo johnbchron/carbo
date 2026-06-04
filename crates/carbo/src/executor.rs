@@ -102,7 +102,10 @@ impl Executor {
                 )));
             }
             Err(error) => {
-              self.event_tx.event(Event::CriticalFailure(error));
+              self.event_tx.event(Event::CriticalFailure {
+                message: "failed to spawn a renderer".into(),
+                error,
+              });
             }
           }
         }
