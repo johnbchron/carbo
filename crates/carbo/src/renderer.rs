@@ -88,7 +88,7 @@ impl Renderer {
       renderer_command_rx,
       cached_scene: vello::Scene::new(),
       window,
-      _event_tx: event_tx,
+      _event_tx: event_tx.clone(),
     };
 
     let join_handle = std::thread::Builder::new()
@@ -103,6 +103,7 @@ impl Renderer {
     let handle = RendererHandle {
       _join_handle: join_handle,
       renderer_command_tx,
+      event_tx,
     };
 
     Ok(handle)
@@ -249,33 +250,41 @@ impl Renderer {
 pub struct RendererHandle {
   _join_handle:        JoinHandle<()>,
   renderer_command_tx: mpsc::Sender<RendererCommand>,
+  event_tx:            EventSender,
 }
 
 impl RendererHandle {
   /// Sends a [`FrameInput`] to the renderer, to be drawn and rendered to the
   /// [`Renderer`]'s surface.
   pub fn send_frame_input(&self, input: FrameInput) {
-    self
-      .renderer_command_tx
-      .send(RendererCommand::FrameInput(input))
-      .unwrap();
+    self.command(RendererCommand::FrameInput(input));
   }
 
   /// Notifies the [`Renderer`] of a resize event, and prompts it to reconfigure
   /// its surface.
   pub fn send_resize(&self, new_size: PhysicalSize<u32>) {
-    self
-      .renderer_command_tx
-      .send(RendererCommand::Resized(new_size.width, new_size.height))
-      .unwrap();
+    self.command(RendererCommand::Resized(new_size.width, new_size.height));
   }
 
   /// Notifies the [`Renderer`] of a scale factor change, prompting it to render
   /// later frames at this scale factor.
   pub fn send_scale_factor_change(&self, new_scale_factor: f64) {
-    self
+    self.command(RendererCommand::ChangedScaleFactor(new_scale_factor));
+  }
+
+  fn command(&self, command: RendererCommand) {
+    if let Err(e) = self
       .renderer_command_tx
-      .send(RendererCommand::ChangedScaleFactor(new_scale_factor))
-      .unwrap();
+      .send(command)
+      .into_diagnostic()
+      .context("failed to send render command to renderer")
+    {
+      self.event_tx.event(crate::event::Event::CriticalFailure {
+        message: "failed to send renderer command to renderer because the \
+                  renderer thread has exited"
+          .into(),
+        error:   e,
+      });
+    }
   }
 }
