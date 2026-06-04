@@ -4,9 +4,9 @@ use std::{
 };
 
 use miette::{Context, IntoDiagnostic};
-use tracing::{info_span, instrument};
+use tracing::{Instrument, info_span, instrument};
 use vello::peniko::color::palette;
-use wgpu::CommandEncoderDescriptor;
+use wgpu::{CommandEncoderDescriptor, TextureViewDescriptor};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
@@ -214,15 +214,13 @@ impl Renderer {
       .in_scope(|| self.surface_state.get_current_surface_texture())?;
 
     // queue the blit op
-    info_span!("encode").in_scope(|| {
-      encoder.copy_texture_to_texture(
-        self.surface_state.get_target_texture().as_image_copy(),
-        surface_tex.texture.as_image_copy(),
-        wgpu::Extent3d {
-          width,
-          height,
-          depth_or_array_layers: 1,
-        },
+    info_span!("encode_blit").in_scope(|| {
+      self.surface_state.enqueue_blit(
+        &mut encoder,
+        &surface_tex.texture.create_view(&TextureViewDescriptor {
+          label: Some("surface_tex_view"),
+          ..Default::default()
+        }),
       );
     });
 

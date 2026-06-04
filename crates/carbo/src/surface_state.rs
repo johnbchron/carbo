@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
+use derive_debug::Dbg;
 use miette::{Context, IntoDiagnostic};
 use tracing::{info_span, instrument};
 use wgpu::{
-  Surface, SurfaceConfiguration, SurfaceTexture, Texture, TextureDescriptor,
-  TextureDimension, TextureFormat, TextureUsages, TextureView,
-  TextureViewDescriptor,
+  CommandEncoder, Surface, SurfaceConfiguration, SurfaceTexture, Texture,
+  TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+  TextureView, TextureViewDescriptor, util::TextureBlitter,
 };
 use winit::window::Window;
 
@@ -14,13 +15,15 @@ use crate::{gpu_context::GpuContext, renderer::SkipFrame};
 /// Manages a [`wgpu::Surface`]. This is held by the
 /// [`Renderer`](crate::renderer::Renderer) and is used to present frames to the
 /// window.
-#[derive(Debug)]
+#[derive(Dbg)]
 pub struct SurfaceState {
   gpu:            Arc<GpuContext>,
   surface:        Surface<'static>,
   surface_config: SurfaceConfiguration,
   target_texture: Texture,
   target_view:    TextureView,
+  #[dbg(skip)]
+  blitter:        TextureBlitter,
 }
 
 impl SurfaceState {
@@ -37,19 +40,32 @@ impl SurfaceState {
       .into_diagnostic()
       .context("failed to create surface from GPU instance")?;
 
+    let width = size.width.max(1);
+    let height = size.height.max(1);
+
+    let default_surface_config = surface
+      .get_default_config(gpu.adapter(), width, height)
+      .ok_or_else(|| {
+        miette::miette!(
+          "failed to get default configuration for surface because the \
+           surface isn't compatible with the adapter"
+        )
+      })?;
+
+    let surface_format = cfg_select! {
+      target_os = "linux" => TextureFormat::Rgba8Unorm,
+      target_os = "macos" => TextureFormat::Bgra8Unorm,
+    };
     let surface_config = SurfaceConfiguration {
       usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_DST,
-      // required for STORAGE_ATTACHMENT on render target texture
-      format: TextureFormat::Rgba8Unorm,
-      width: size.width.max(1),
-      height: size.height.max(1),
+      format: surface_format,
       present_mode: wgpu::PresentMode::AutoVsync,
-      desired_maximum_frame_latency: 2,
-      alpha_mode: wgpu::CompositeAlphaMode::Auto,
-      view_formats: vec![],
+      ..default_surface_config
     };
 
     surface.configure(gpu.device(), &surface_config);
+
+    let blitter = TextureBlitter::new(gpu.device(), surface_config.format);
 
     let target_texture = gpu.device().create_texture(&TextureDescriptor {
       label:           Some("vello target"),
@@ -61,8 +77,11 @@ impl SurfaceState {
       mip_level_count: 1,
       sample_count:    1,
       dimension:       TextureDimension::D2,
-      format:          surface_config.format,
-      usage:           TextureUsages::STORAGE_BINDING | TextureUsages::COPY_SRC,
+      // necessitated by vello
+      format:          TextureFormat::Rgba8Unorm,
+      // needs STORAGE_BINDING for vello and TEXTURE_BINDING for blitting
+      usage:           TextureUsages::STORAGE_BINDING
+        | TextureUsages::TEXTURE_BINDING,
       view_formats:    &[],
     });
     let target_view =
@@ -74,6 +93,7 @@ impl SurfaceState {
       surface_config,
       target_texture,
       target_view,
+      blitter,
     })
   }
 
@@ -98,7 +118,7 @@ impl SurfaceState {
 
     let target_texture = info_span!("create_target_texture").in_scope(|| {
       self.gpu.device().create_texture(&TextureDescriptor {
-        label:           Some("vello target"),
+        label:           Some("vello_target"),
         size:            wgpu::Extent3d {
           width:                 self.config_width(),
           height:                self.config_height(),
@@ -109,16 +129,27 @@ impl SurfaceState {
         dimension:       TextureDimension::D2,
         format:          self.config_format(),
         usage:           TextureUsages::STORAGE_BINDING
-          | TextureUsages::COPY_SRC,
+          | TextureUsages::TEXTURE_BINDING,
         view_formats:    &[],
       })
     });
 
     self.target_view =
       info_span!("create_target_texture_view").in_scope(|| {
-        target_texture.create_view(&TextureViewDescriptor::default())
+        target_texture.create_view(&TextureViewDescriptor {
+          label: Some("vello_target_view"),
+          ..Default::default()
+        })
       });
     self.target_texture = target_texture;
+  }
+
+  /// Encodes a blit operation from the held target texture to the given texture
+  /// view.
+  pub fn enqueue_blit(&self, encoder: &mut CommandEncoder, to: &TextureView) {
+    self
+      .blitter
+      .copy(self.gpu.device(), encoder, &self.target_view, to);
   }
 
   /// The width specified in the surface config.
