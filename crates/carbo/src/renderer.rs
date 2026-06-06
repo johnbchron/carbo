@@ -4,7 +4,7 @@ use std::{
 };
 
 use miette::{Context, IntoDiagnostic};
-use tracing::{Instrument, info_span, instrument};
+use tracing::{info_span, instrument};
 use vello::peniko::color::palette;
 use wgpu::{CommandEncoderDescriptor, TextureViewDescriptor};
 use winit::{dpi::PhysicalSize, window::Window};
@@ -35,13 +35,22 @@ use crate::{
 /// surface, but we have to keep track of the scale factor and frame count as
 /// mutable state in the [`Renderer`].
 pub struct Renderer {
+  /// GPU context handle
   gpu:                  Arc<GpuContext>,
+  /// vello renderer
   renderer:             vello::Renderer,
+  /// state for the window's surface; used to present frames.
   surface_state:        SurfaceState,
+  /// the last scale factor sent by the app. held here to sync to frame inputs
+  /// correctly.
   current_scale_factor: f64,
+  /// incremented on frame presentation.
   current_frame_count:  u64,
+  /// receives communication from the [`RendererHandle`].
   renderer_command_rx:  mpsc::Receiver<RendererCommand>,
+  /// retained vello scene to reuse allocations
   cached_scene:         vello::Scene,
+  /// handle to the window for notifying that we're about to present a frame
   window:               Arc<Window>,
   _event_tx:            EventSender,
 }
@@ -121,7 +130,7 @@ impl Renderer {
       // the next command to execute
       let mut command = Some(first);
 
-      // execute the command we have queued
+      // coalesce the commands that are waiting
       while let Some(cmd) = command {
         match cmd {
           // don't render yet, just store the frame input
@@ -146,7 +155,7 @@ impl Renderer {
         command = self.renderer_command_rx.try_recv().ok();
       }
 
-      // apply the latest resize once, after the drain
+      // apply the latest resize
       if let Some((physical_width, physical_height)) = pending_resize {
         self.surface_state.resize_surface(
           self.gpu.device(),
@@ -210,18 +219,20 @@ impl Renderer {
       .device()
       .create_command_encoder(&CommandEncoderDescriptor::default());
 
+    // get the current surface texture & a view into it
     let surface_tex = info_span!("get_surface_tex")
       .in_scope(|| self.surface_state.get_current_surface_texture())?;
+    let surface_tex_view =
+      surface_tex.texture.create_view(&TextureViewDescriptor {
+        label: Some("surface_tex_view"),
+        ..Default::default()
+      });
 
-    // queue the blit op
+    // queue the blit op from the vello target to the surface
     info_span!("encode_blit").in_scope(|| {
-      self.surface_state.enqueue_blit(
-        &mut encoder,
-        &surface_tex.texture.create_view(&TextureViewDescriptor {
-          label: Some("surface_tex_view"),
-          ..Default::default()
-        }),
-      );
+      self
+        .surface_state
+        .enqueue_blit(&mut encoder, &surface_tex_view);
     });
 
     // hint the window and submit all the work to the GPU

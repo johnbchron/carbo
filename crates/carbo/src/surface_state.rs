@@ -12,9 +12,7 @@ use winit::window::Window;
 
 use crate::{gpu_context::GpuContext, renderer::SkipFrame};
 
-/// Manages a [`wgpu::Surface`]. This is held by the
-/// [`Renderer`](crate::renderer::Renderer) and is used to present frames to the
-/// window.
+/// Manages a [`wgpu::Surface`]. This is used to present frames to the window.
 #[derive(Dbg)]
 pub struct SurfaceState {
   gpu:            Arc<GpuContext>,
@@ -52,6 +50,7 @@ impl SurfaceState {
         )
       })?;
 
+    // don't allow the OS to select manually to avoid SRGB formats
     let surface_format = cfg_select! {
       target_os = "linux" => TextureFormat::Rgba8Unorm,
       target_os = "macos" => TextureFormat::Bgra8Unorm,
