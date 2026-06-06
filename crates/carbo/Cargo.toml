@@ -13,6 +13,7 @@ tracing = { version = "0.1" }
 tracing-perfetto = { version = "0.1" }
 tracing-subscriber = { version = "0.3", features = [ "env-filter" ] }
 vello = { version = "0.8" }
+vte = { version = "0.15" }
 wgpu = { version = "28" }
 winit = { version = "0.30" }
 

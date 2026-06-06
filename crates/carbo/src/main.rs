@@ -7,6 +7,7 @@ mod event;
 mod event_sender;
 mod executor;
 mod gpu_context;
+mod pty;
 mod renderer;
 mod surface_state;
 mod window_handle;
