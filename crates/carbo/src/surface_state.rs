@@ -107,11 +107,13 @@ impl SurfaceState {
     if self.surface_config.width == width
       && self.surface_config.height == height
     {
+      tracing::debug!("skipping surface resize: already at requested size");
       return;
     }
 
     self.surface_config.width = width.max(1);
     self.surface_config.height = height.max(1);
+    tracing::debug!("resizing surface to ({width}, {height})");
     self.reconfigure_surface(device);
   }
 
