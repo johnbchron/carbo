@@ -127,7 +127,7 @@ impl SurfaceState {
         mip_level_count: 1,
         sample_count:    1,
         dimension:       TextureDimension::D2,
-        format:          self.config_format(),
+        format:          self.surface_config.format,
         usage:           TextureUsages::STORAGE_BINDING
           | TextureUsages::TEXTURE_BINDING,
         view_formats:    &[],
@@ -158,9 +158,6 @@ impl SurfaceState {
   /// The height specified in the surface config.
   pub fn config_height(&self) -> u32 { self.surface_config.height }
 
-  /// The format specified in the surface config.
-  pub fn config_format(&self) -> TextureFormat { self.surface_config.format }
-
   /// Returns the next texture to be presented by the swapchain.
   pub fn get_current_surface_texture(
     &self,
@@ -176,7 +173,4 @@ impl SurfaceState {
 
   /// Returns a [`TextureView`] into the current target [`Texture`].
   pub fn get_target_texture_view(&self) -> &TextureView { &self.target_view }
-
-  /// Returns the current target [`Texture`].
-  pub fn get_target_texture(&self) -> &Texture { &self.target_texture }
 }
