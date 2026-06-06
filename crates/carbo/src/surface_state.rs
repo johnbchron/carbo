@@ -103,6 +103,13 @@ impl SurfaceState {
     width: u32,
     height: u32,
   ) {
+    // bail early
+    if self.surface_config.width == width
+      && self.surface_config.height == height
+    {
+      return;
+    }
+
     self.surface_config.width = width.max(1);
     self.surface_config.height = height.max(1);
     self.reconfigure_surface(device);
