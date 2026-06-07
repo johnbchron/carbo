@@ -11,6 +11,7 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
   draw::{FrameInput, FullFrameInput},
+  event::Event,
   event_sender::EventSender,
   gpu_context::GpuContext,
   surface_state::SurfaceState,
@@ -102,9 +103,17 @@ impl Renderer {
 
     let join_handle = std::thread::Builder::new()
       .name("renderer".into())
-      .spawn(move || {
-        let mut renderer = renderer;
-        renderer.run().unwrap();
+      .spawn({
+        let event_tx = event_tx.clone();
+        move || {
+          let mut renderer = renderer;
+          if let Err(e) = renderer.run() {
+            event_tx.event(Event::CriticalFailure {
+              message: "the renderer thread failed".into(),
+              error:   e,
+            });
+          }
+        }
       })
       .into_diagnostic()
       .context("failed to launch renderer thread")?;
@@ -288,7 +297,7 @@ impl RendererHandle {
       .into_diagnostic()
       .context("failed to send render command to renderer")
     {
-      self.event_tx.event(crate::event::Event::CriticalFailure {
+      self.event_tx.event(Event::CriticalFailure {
         message: "failed to send renderer command to renderer because the \
                   renderer thread has exited"
           .into(),

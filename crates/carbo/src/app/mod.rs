@@ -3,6 +3,7 @@ mod state;
 
 use std::sync::mpsc;
 
+use miette::IntoDiagnostic;
 use tracing::{debug, info, info_span};
 use winit::{self, dpi::PhysicalSize, event::WindowEvent};
 
@@ -71,7 +72,10 @@ impl App {
 
       match event {
         Event::ApplicationStarted => {
-          self.command(Command::SpawnPty(PtySpawnArguments {}));
+          self.command(Command::SpawnPty(PtySpawnArguments {
+            rows: 24,
+            cols: 80,
+          }));
         }
 
         // mainline event loop control flow
@@ -148,20 +152,43 @@ impl App {
         Event::RendererSpawned(window_handle) => {
           self.accept_window_handle(window_handle);
         }
-        Event::PtySpawned(new_pty_handle) => match &mut self.state.pty {
-          // accept new pty
-          state @ (PtyLifecyle::NotSpawned | PtyLifecyle::Exited) => {
-            tracing::info!("new pty spawned");
-            *state = PtyLifecyle::Alive(new_pty_handle);
+        Event::PtySpawned(new_pty_handle, new_pty_state) => {
+          match &mut self.state.pty {
+            // accept new pty
+            state @ (PtyLifecyle::NotSpawned | PtyLifecyle::Exited) => {
+              tracing::info!("new pty spawned");
+              *state = PtyLifecyle::Alive(new_pty_handle, new_pty_state);
+            }
+            // handle lifecycles shouldn't collide
+            PtyLifecyle::Alive(..) => {
+              self.event_loopback.event(Event::CriticalFailure {
+                message: "new PTY was spawned while still holding the \
+                          existing handle"
+                  .into(),
+                error:   miette::miette!("cannot swap in newly spawned PTY"),
+              });
+            }
           }
-          // warn and drop the old one
-          PtyLifecyle::Alive(pty_handle) => {
+        }
+        Event::PtySnapshot(new_pty_state) => match &mut self.state.pty {
+          PtyLifecyle::NotSpawned => unreachable!(
+            "no pty state snapshots should be received before the pty is \
+             spawned"
+          ),
+          PtyLifecyle::Alive(_, pty_state) => {
+            *pty_state = new_pty_state;
+            tracing::debug!("received new pty state snapshot");
+          }
+          PtyLifecyle::Exited => {
             tracing::warn!(
-              "new pty spawned while existing pty lives; killing old pty"
+              "received pty state snapshot after pty exited; ignoring"
             );
-            *pty_handle = new_pty_handle;
           }
         },
+        Event::PtyExited => {
+          tracing::debug!("pty child exited; dropping pty handle");
+          self.state.pty = PtyLifecyle::Exited;
+        }
         Event::ExitRequested => {
           self.shut_down_app();
           return Ok(());
@@ -196,6 +223,18 @@ impl App {
 
   fn shut_down_app(&mut self) {
     tracing::info!("shutting down app");
+
+    // kill pty child
+    if let PtyLifecyle::Alive(pty_handle, ..) = &mut self.state.pty
+      && let Err(e) = pty_handle.kill_child().into_diagnostic()
+    {
+      self.event_loopback.event(Event::CriticalFailure {
+        message: "failed to kill pty child while shutting down app".into(),
+        error:   e,
+      });
+    };
+
+    // shut down winit system
     self.drop_window();
     self.command(Command::EventLoopCommand(EventLoopCommand::ExitEventLoop));
   }

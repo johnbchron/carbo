@@ -5,7 +5,10 @@ use winit::{
   window::{Window, WindowId},
 };
 
-use crate::{pty::PtyHandle, window_handle::WindowHandle};
+use crate::{
+  pty::{PtyHandle, PtyState},
+  window_handle::WindowHandle,
+};
 
 /// An event relating to windows or [`winit`].
 #[derive(Debug)]
@@ -45,7 +48,11 @@ pub enum Event {
   /// command.
   RendererSpawned(WindowHandle),
   /// Completion of the [`Command::SpawnPty`](crate::executor::Command) command.
-  PtySpawned(PtyHandle),
+  PtySpawned(PtyHandle, PtyState),
+  /// The PTY has shut down, and the current handle should be dropped.
+  PtyExited,
+  /// The PTY has sent a snapshot of its state.
+  PtySnapshot(PtyState),
   /// The user requested for the application to exit.
   ExitRequested,
   /// Some component of the application has critically failed.

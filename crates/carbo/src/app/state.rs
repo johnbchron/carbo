@@ -4,7 +4,9 @@ use miette::Context;
 use tracing::instrument;
 
 use crate::{
-  gpu_context::GpuContext, pty::PtyHandle, window_handle::WindowHandle,
+  gpu_context::GpuContext,
+  pty::{PtyHandle, PtyState},
+  window_handle::WindowHandle,
 };
 
 pub struct AppState {
@@ -30,6 +32,6 @@ impl AppState {
 pub enum PtyLifecyle {
   #[default]
   NotSpawned,
-  Alive(PtyHandle),
+  Alive(PtyHandle, PtyState),
   Exited,
 }

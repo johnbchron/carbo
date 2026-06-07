@@ -79,17 +79,19 @@ impl Executor {
           );
           let _ = self.winit_tx.send_event(event_loop_command);
         }
-        Command::SpawnPty(args) => match Pty::launch(args) {
-          Ok(handle) => {
-            self.event_tx.event(Event::PtySpawned(handle));
+        Command::SpawnPty(args) => {
+          match Pty::launch(args, self.event_tx.clone()) {
+            Ok((handle, state)) => {
+              self.event_tx.event(Event::PtySpawned(handle, state));
+            }
+            Err(e) => {
+              self.event_tx.event(Event::CriticalFailure {
+                message: "failed to spawn a PTY".into(),
+                error:   e,
+              });
+            }
           }
-          Err(e) => {
-            self.event_tx.event(Event::CriticalFailure {
-              message: "failed to spawn a PTY".into(),
-              error:   e,
-            });
-          }
-        },
+        }
       }
     }
 
