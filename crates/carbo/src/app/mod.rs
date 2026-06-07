@@ -14,7 +14,7 @@ use crate::{
   event::{Event, WindowingEvent, WinitEventLoopEvent},
   event_sender::EventSender,
   executor::{Command, EventLoopCommand},
-  pty::PtySpawnArguments,
+  pty::{PtySpawnArguments, PtyState},
   window_handle::WindowHandle,
 };
 
@@ -240,7 +240,11 @@ impl App {
   }
 
   fn initiate_frame(&self) {
-    let frame_input = FrameInput {};
+    let pty_state = match &self.state.pty {
+      PtyLifecyle::Alive(_, pty_state) => Some(pty_state.clone()),
+      _ => None,
+    };
+    let frame_input = FrameInput { pty: pty_state };
 
     let Some(window_handle) = self.get_window_handle() else {
       tracing::warn!("attempted to initiate a frame without a window present");

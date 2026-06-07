@@ -1,5 +1,6 @@
 #[derive(Debug, Default, Clone)]
 pub struct PtyState {
+  /// placeholder
   output: String,
 }
 
