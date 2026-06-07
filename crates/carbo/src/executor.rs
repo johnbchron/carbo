@@ -2,7 +2,12 @@ use std::sync::{Arc, mpsc};
 
 use winit::{event_loop::EventLoopProxy, window::Window};
 
-use crate::{event_sender::EventSender, gpu_context::GpuContext};
+use crate::{
+  event::Event,
+  event_sender::EventSender,
+  gpu_context::GpuContext,
+  pty::{Pty, PtySpawnArguments},
+};
 
 #[derive(Debug)]
 /// Represents an action to be taken by the [`Executor`]. Commands can only be
@@ -11,11 +16,14 @@ pub enum Command {
   /// Commands that must be executed by the
   /// [`WinitApp`](crate::winit_app::WinitApp).
   EventLoopCommand(EventLoopCommand),
+  /// Spawns a PTY handling thread.
+  SpawnPty(PtySpawnArguments),
 }
 
 /// Commands forwarded to the [`WinitApp`](crate::winit_app::WinitApp) to be
 /// executed with access to the
-/// [`ActiveEventLoop`](winit::event_loop::ActiveEventLoop).
+/// [`ActiveEventLoop`](winit::event_loop::ActiveEventLoop) or on the main
+/// thread.
 #[derive(Debug)]
 pub enum EventLoopCommand {
   /// Builds a window using the winit event loop.
@@ -71,6 +79,17 @@ impl Executor {
           );
           let _ = self.winit_tx.send_event(event_loop_command);
         }
+        Command::SpawnPty(args) => match Pty::launch(args) {
+          Ok(handle) => {
+            self.event_tx.event(Event::PtySpawned(handle));
+          }
+          Err(e) => {
+            self.event_tx.event(Event::CriticalFailure {
+              message: "failed to spawn a PTY".into(),
+              error:   e,
+            });
+          }
+        },
       }
     }
 

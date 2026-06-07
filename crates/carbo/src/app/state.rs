@@ -3,11 +3,14 @@ use std::sync::Arc;
 use miette::Context;
 use tracing::instrument;
 
-use crate::{gpu_context::GpuContext, window_handle::WindowHandle};
+use crate::{
+  gpu_context::GpuContext, pty::PtyHandle, window_handle::WindowHandle,
+};
 
 pub struct AppState {
-  pub(crate) gpu:    Arc<GpuContext>,
-  pub(crate) window: Option<WindowHandle>,
+  pub gpu:    Arc<GpuContext>,
+  pub window: Option<WindowHandle>,
+  pub pty:    PtyLifecyle,
 }
 
 impl AppState {
@@ -18,6 +21,15 @@ impl AppState {
         GpuContext::new().context("failed to build GPU context")?,
       ),
       window: None,
+      pty:    PtyLifecyle::default(),
     })
   }
+}
+
+#[derive(Default)]
+pub enum PtyLifecyle {
+  #[default]
+  NotSpawned,
+  Alive(PtyHandle),
+  Exited,
 }

@@ -7,8 +7,11 @@ pub struct Pty {
   pty_command_rx: mpsc::Receiver<PtyCommand>,
 }
 
+#[derive(Debug)]
+pub struct PtySpawnArguments {}
+
 impl Pty {
-  pub fn launch() -> miette::Result<PtyHandle> {
+  pub fn launch(_args: PtySpawnArguments) -> miette::Result<PtyHandle> {
     let (pty_command_tx, pty_command_rx) = mpsc::channel();
 
     let parser = vte::Parser::new();
@@ -49,6 +52,7 @@ impl Pty {
 
 struct PtyState {}
 
+#[derive(Debug)]
 pub struct PtyHandle {
   _join_handle:   JoinHandle<()>,
   pty_command_tx: mpsc::Sender<PtyCommand>,

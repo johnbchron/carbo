@@ -7,11 +7,13 @@ use tracing::{debug, info, info_span};
 use winit::{self, dpi::PhysicalSize, event::WindowEvent};
 
 pub use self::state::AppState;
+use self::state::PtyLifecyle;
 use crate::{
   draw::FrameInput,
   event::{Event, WindowingEvent, WinitEventLoopEvent},
   event_sender::EventSender,
   executor::{Command, EventLoopCommand},
+  pty::PtySpawnArguments,
   window_handle::WindowHandle,
 };
 
@@ -64,7 +66,7 @@ impl App {
 
       match event {
         Event::ApplicationStarted => {
-          tracing::error!("time to start the pty");
+          self.command(Command::SpawnPty(PtySpawnArguments {}));
         }
 
         // mainline event loop control flow
@@ -141,6 +143,20 @@ impl App {
         Event::RendererSpawned(window_handle) => {
           self.accept_window_handle(window_handle);
         }
+        Event::PtySpawned(new_pty_handle) => match &mut self.state.pty {
+          // accept new pty
+          state @ (PtyLifecyle::NotSpawned | PtyLifecyle::Exited) => {
+            tracing::info!("new pty spawned");
+            *state = PtyLifecyle::Alive(new_pty_handle);
+          }
+          // warn and drop the old one
+          PtyLifecyle::Alive(pty_handle) => {
+            tracing::warn!(
+              "new pty spawned while existing pty lives; killing old pty"
+            );
+            *pty_handle = new_pty_handle;
+          }
+        },
         Event::ExitRequested => {
           self.shut_down_app();
           return Ok(());

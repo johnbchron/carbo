@@ -5,7 +5,7 @@ use winit::{
   window::{Window, WindowId},
 };
 
-use crate::window_handle::WindowHandle;
+use crate::{pty::PtyHandle, window_handle::WindowHandle};
 
 /// An event relating to windows or [`winit`].
 #[derive(Debug)]
@@ -40,9 +40,12 @@ pub enum Event {
   ApplicationStarted,
   /// An event relating to windows or [`winit`].
   Windowing(Box<WindowingEvent>),
-  /// Completion of the [`Command::SpawnRenderer`](crate::executor::Command)
+  /// Completion of the
+  /// [`WindowingCommand::SpawnRenderer`](crate::executor::WindowingCommand)
   /// command.
   RendererSpawned(WindowHandle),
+  /// Completion of the [`Command::SpawnPty`](crate::executor::Command) command.
+  PtySpawned(PtyHandle),
   /// The user requested for the application to exit.
   ExitRequested,
   /// Some component of the application has critically failed.
