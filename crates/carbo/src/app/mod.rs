@@ -24,16 +24,21 @@ use crate::{
 /// - Send a command to the [`Executor`]
 /// - Kick a frame off to a [`WindowHandle`]
 ///
+/// ## Guidelines
 /// The [`App`] is meant to run a really tight loop because all input and events
-/// flow through it. If processing the event takes too long and the watchdog
-/// timer is tripped, a warning log will fire.
+/// flow through it. If the thing you want to do takes more than just a quick
+/// state mutation, turn it into a command. Package whatever state you need and
+/// send it to the [`Executor`], and then fire an event when it's done. If you
+/// need, you can receive that event and kick off another command or event.
+/// Events and commands can be chained easily. You can package a state machine
+/// that you pass back and forth if you wish.
 ///
-/// If the thing you want to do takes more than just a quick state mutation,
-/// turn it into a command. Package whatever state you need and send it to the
-/// [`Executor`], and then fire an event when it's done. If you need, you can
-/// receive that event and kick off another command or event. Events and
-/// commands can be chained easily. You can package a state machine that you
-/// pass back and forth if you wish.
+/// Maintain logical flow in event handling. There are generally two types of
+/// events: stimulus events (X thing happened) and intent events (it's time to
+/// do X). If an action is not semantically tied to a stimulus event, create an
+/// intent event and fire it from the stimulus event, e.g. don't fire the exit
+/// machinery directly from a Ctrl+Q key window event, but rather fire an
+/// ExitRequested event, and then fire the exit machinery from there.
 ///
 /// ## Flows
 /// ### Starting the main window
