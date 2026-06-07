@@ -1,4 +1,5 @@
 mod perform_impl;
+mod state;
 
 use std::{
   io::{self, Read, Write},
@@ -8,6 +9,7 @@ use std::{
 use miette::{Context, IntoDiagnostic};
 use portable_pty::ChildKiller;
 
+pub use self::state::PtyState;
 use crate::{event::Event, event_sender::EventSender};
 
 pub struct Pty {
@@ -135,9 +137,6 @@ impl Pty {
     Ok(())
   }
 }
-
-#[derive(Debug, Default, Clone)]
-pub struct PtyState {}
 
 #[derive(Debug)]
 pub struct PtyHandle {
