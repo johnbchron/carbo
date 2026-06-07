@@ -8,6 +8,7 @@ use std::{
 
 use miette::{Context, IntoDiagnostic};
 use portable_pty::ChildKiller;
+use tracing::info_span;
 
 pub use self::state::PtyState;
 use crate::{event::Event, event_sender::EventSender};
@@ -33,6 +34,7 @@ impl Pty {
   ) -> miette::Result<(PtyHandle, PtyState)> {
     let PtySpawnArguments { rows, cols } = args;
 
+    let entered = info_span!("pty_open").entered();
     let pty_system = portable_pty::native_pty_system();
     let portable_pty::PtyPair { slave, master } = pty_system
       .openpty(portable_pty::PtySize {
@@ -57,6 +59,7 @@ impl Pty {
       .take_writer()
       .map_err(|e| miette::miette!(e))
       .context("failed to take PTY writer from master side")?;
+    drop(entered);
 
     let (pty_command_tx, pty_command_rx) = mpsc::channel();
 
@@ -108,6 +111,7 @@ impl Pty {
 
   fn run(&mut self) -> miette::Result<()> {
     while let Ok(first) = self.pty_command_rx.recv() {
+      let entered = info_span!("command_dispatch").entered();
       let mut pending_out = Vec::new();
       let mut cmd = Some(first);
 
@@ -126,7 +130,10 @@ impl Pty {
         }
         cmd = self.pty_command_rx.try_recv().ok();
       }
+      drop(entered);
+
       if !pending_out.is_empty() {
+        let _entered = info_span!("parser_advance");
         self.parser.advance(&mut self.state, &pending_out);
         let _ = self
           .event_tx
@@ -165,7 +172,10 @@ fn run_reader(
 ) {
   let mut buf = [0u8; 64 * 1024];
   loop {
-    match reader.read(&mut buf) {
+    let result =
+      tracing::info_span!("read_master").in_scope(|| reader.read(&mut buf));
+    let _entered = tracing::info_span!("dispatch_read").entered();
+    match result {
       // an EOF means the child closed the slave side
       Ok(0) => {
         tracing::debug!("pty reader reached EOF");
