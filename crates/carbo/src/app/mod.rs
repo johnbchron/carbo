@@ -57,10 +57,16 @@ impl App {
 
   /// Run the app event loop.
   pub fn run(&mut self) -> miette::Result<()> {
+    self.event_loopback.event(Event::ApplicationStarted);
+
     while let Ok(event) = self.event_rx.recv() {
       let _span = info_span!("event_dispatch", event = ?event).entered();
 
       match event {
+        Event::ApplicationStarted => {
+          tracing::error!("time to start the pty");
+        }
+
         // mainline event loop control flow
         Event::Windowing(box WindowingEvent::EventLoop(
           WinitEventLoopEvent::Resumed,

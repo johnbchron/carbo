@@ -36,6 +36,8 @@ pub enum WinitEventLoopEvent {
 /// An event.
 #[derive(Debug)]
 pub enum Event {
+  /// The launching process has finished and the application has fully started.
+  ApplicationStarted,
   /// An event relating to windows or [`winit`].
   Windowing(Box<WindowingEvent>),
   /// Completion of the [`Command::SpawnRenderer`](crate::executor::Command)
