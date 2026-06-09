@@ -155,7 +155,7 @@ impl App {
         Event::PtySpawned(new_pty_handle, new_pty_state) => {
           match &mut self.state.pty {
             // accept new pty
-            state @ (PtyLifecyle::NotSpawned | PtyLifecyle::Exited) => {
+            state @ (PtyLifecyle::NotSpawned | PtyLifecyle::Exited(_)) => {
               tracing::info!("new pty spawned");
               *state = PtyLifecyle::Alive(new_pty_handle, new_pty_state);
             }
@@ -176,18 +176,32 @@ impl App {
              spawned"
           ),
           PtyLifecyle::Alive(_, pty_state) => {
-            *pty_state = new_pty_state;
             tracing::debug!("received new pty state snapshot");
+            *pty_state = new_pty_state;
           }
-          PtyLifecyle::Exited => {
-            tracing::warn!(
-              "received pty state snapshot after pty exited; ignoring"
-            );
+          PtyLifecyle::Exited(pty_state) => {
+            tracing::debug!("received pty state snapshot after pty exited");
+            *pty_state = new_pty_state;
           }
         },
         Event::PtyExited => {
-          tracing::debug!("pty child exited; dropping pty handle");
-          self.state.pty = PtyLifecyle::Exited;
+          self.state.pty = match std::mem::replace(
+            &mut self.state.pty,
+            PtyLifecyle::NotSpawned,
+          ) {
+            PtyLifecyle::NotSpawned => {
+              tracing::warn!("got pty child exited event without live pty");
+              PtyLifecyle::NotSpawned
+            }
+            PtyLifecyle::Alive(_, pty_state) => {
+              tracing::debug!("pty child exited; dropping pty handle");
+              PtyLifecyle::Exited(pty_state)
+            }
+            exited @ PtyLifecyle::Exited(..) => {
+              tracing::warn!("got duplicated pty child exited event");
+              exited
+            }
+          };
         }
         Event::ExitRequested => {
           self.shut_down_app();

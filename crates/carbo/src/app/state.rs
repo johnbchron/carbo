@@ -33,5 +33,5 @@ pub enum PtyLifecyle {
   #[default]
   NotSpawned,
   Alive(PtyHandle, PtyState),
-  Exited,
+  Exited(PtyState),
 }
