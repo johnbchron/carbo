@@ -3,6 +3,7 @@ mod state;
 
 use std::{
   io::{self, Read, Write},
+  num::NonZeroU16,
   sync::mpsc,
 };
 
@@ -23,8 +24,8 @@ pub struct Pty {
 
 #[derive(Debug)]
 pub struct PtySpawnArguments {
-  pub rows: u16,
-  pub cols: u16,
+  pub rows: NonZeroU16,
+  pub cols: NonZeroU16,
 }
 
 impl Pty {
@@ -38,9 +39,9 @@ impl Pty {
     let pty_system = portable_pty::native_pty_system();
     let portable_pty::PtyPair { slave, master } = pty_system
       .openpty(portable_pty::PtySize {
-        rows,
-        cols,
-        pixel_width: 0,
+        rows:         rows.get(),
+        cols:         cols.get(),
+        pixel_width:  0,
         pixel_height: 0,
       })
       .map_err(|e| miette::miette!(e))
@@ -69,7 +70,7 @@ impl Pty {
       pty_command_rx,
       parser,
       writer,
-      state: PtyState::default(),
+      state: PtyState::new(rows, cols),
       event_tx: event_tx.clone(),
     };
 

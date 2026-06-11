@@ -1,9 +1,8 @@
-#[derive(Debug, Default, Clone)]
-pub struct PtyState {
-  /// placeholder
-  output: String,
-}
+use std::num::NonZeroU16;
+
+#[derive(Debug, Clone)]
+pub struct PtyState {}
 
 impl PtyState {
-  pub fn push_char(&mut self, c: char) { self.output.push(c); }
+  pub fn new(_rows: NonZeroU16, _cols: NonZeroU16) -> Self { Self {} }
 }

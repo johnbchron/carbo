@@ -1,7 +1,7 @@
 mod launch;
 mod state;
 
-use std::sync::mpsc;
+use std::{num::NonZeroU16, sync::mpsc};
 
 use miette::IntoDiagnostic;
 use tracing::{debug, info, info_span};
@@ -73,8 +73,8 @@ impl App {
       match event {
         Event::ApplicationStarted => {
           self.command(Command::SpawnPty(PtySpawnArguments {
-            rows: 24,
-            cols: 80,
+            rows: NonZeroU16::new(24).unwrap(),
+            cols: NonZeroU16::new(80).unwrap(),
           }));
         }
 
