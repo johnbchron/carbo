@@ -1,8 +1,11 @@
+mod config;
+
 use std::sync::Arc;
 
 use miette::Context;
 use tracing::instrument;
 
+use self::config::AppConfig;
 use crate::{
   gpu_context::GpuContext,
   pty::{PtyHandle, PtyStateView},
@@ -13,6 +16,7 @@ pub struct AppState {
   pub gpu:    Arc<GpuContext>,
   pub window: Option<WindowHandle>,
   pub pty:    PtyLifecyle,
+  pub config: AppConfig,
 }
 
 impl AppState {
@@ -24,6 +28,7 @@ impl AppState {
       ),
       window: None,
       pty:    PtyLifecyle::default(),
+      config: AppConfig::default(),
     })
   }
 }
