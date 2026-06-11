@@ -1,7 +1,10 @@
 mod launch;
 mod state;
 
-use std::{num::NonZeroU16, sync::mpsc};
+use std::{
+  num::{NonZeroU16, NonZeroUsize},
+  sync::mpsc,
+};
 
 use miette::IntoDiagnostic;
 use tracing::{debug, info, info_span};
@@ -14,7 +17,7 @@ use crate::{
   event::{Event, WindowingEvent, WinitEventLoopEvent},
   event_sender::EventSender,
   executor::{Command, EventLoopCommand},
-  pty::{PtySpawnArguments, PtyState},
+  pty::PtySpawnArguments,
   window_handle::WindowHandle,
 };
 
@@ -73,8 +76,9 @@ impl App {
       match event {
         Event::ApplicationStarted => {
           self.command(Command::SpawnPty(PtySpawnArguments {
-            rows: NonZeroU16::new(24).unwrap(),
-            cols: NonZeroU16::new(80).unwrap(),
+            rows:       NonZeroU16::new(24).unwrap(),
+            cols:       NonZeroU16::new(80).unwrap(),
+            scrollback: NonZeroUsize::new(3000).unwrap(),
           }));
         }
 
@@ -254,11 +258,13 @@ impl App {
   }
 
   fn initiate_frame(&self) {
-    let pty_state = match &self.state.pty {
+    let pty_state_view = match &self.state.pty {
       PtyLifecyle::Alive(_, pty_state) => Some(pty_state.clone()),
       _ => None,
     };
-    let frame_input = FrameInput { pty: pty_state };
+    let frame_input = FrameInput {
+      pty: pty_state_view,
+    };
 
     let Some(window_handle) = self.get_window_handle() else {
       tracing::warn!("attempted to initiate a frame without a window present");

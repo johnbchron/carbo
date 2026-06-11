@@ -3,12 +3,12 @@ use vello::{
   peniko::{Brush, Fill, color::palette},
 };
 
-use crate::pty::PtyState;
+use crate::pty::PtyStateView;
 
 /// A snapshot of [`AppState`](crate::app::AppState) containing all the domain
 /// information needed to draw a frame.
 pub struct FrameInput {
-  pub pty: Option<PtyState>,
+  pub pty: Option<PtyStateView>,
 }
 
 /// A [`FullFrameInput`] plus the rendering info needed to fully draw a frame.

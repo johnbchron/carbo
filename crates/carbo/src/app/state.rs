@@ -5,7 +5,7 @@ use tracing::instrument;
 
 use crate::{
   gpu_context::GpuContext,
-  pty::{PtyHandle, PtyState},
+  pty::{PtyHandle, PtyStateView},
   window_handle::WindowHandle,
 };
 
@@ -32,6 +32,6 @@ impl AppState {
 pub enum PtyLifecyle {
   #[default]
   NotSpawned,
-  Alive(PtyHandle, PtyState),
-  Exited(PtyState),
+  Alive(PtyHandle, PtyStateView),
+  Exited(PtyStateView),
 }

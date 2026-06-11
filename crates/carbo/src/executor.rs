@@ -81,8 +81,10 @@ impl Executor {
         }
         Command::SpawnPty(args) => {
           match Pty::launch(args, self.event_tx.clone()) {
-            Ok((handle, state)) => {
-              self.event_tx.event(Event::PtySpawned(handle, state));
+            Ok((handle, pty_state_view)) => {
+              self
+                .event_tx
+                .event(Event::PtySpawned(handle, pty_state_view));
             }
             Err(e) => {
               self.event_tx.event(Event::CriticalFailure {

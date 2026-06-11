@@ -6,7 +6,7 @@ use winit::{
 };
 
 use crate::{
-  pty::{PtyHandle, PtyState},
+  pty::{PtyHandle, PtyState, PtyStateView},
   window_handle::WindowHandle,
 };
 
@@ -48,11 +48,11 @@ pub enum Event {
   /// command.
   RendererSpawned(WindowHandle),
   /// Completion of the [`Command::SpawnPty`](crate::executor::Command) command.
-  PtySpawned(PtyHandle, PtyState),
+  PtySpawned(PtyHandle, PtyStateView),
   /// The PTY has shut down, and the current handle should be dropped.
   PtyExited,
   /// The PTY has sent a snapshot of its state.
-  PtySnapshot(PtyState),
+  PtySnapshot(PtyStateView),
   /// The user requested for the application to exit.
   ExitRequested,
   /// Some component of the application has critically failed.

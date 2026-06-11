@@ -1,9 +1,8 @@
-mod perform_impl;
 mod state;
 
 use std::{
   io::{self, Read, Write},
-  num::NonZeroU16,
+  num::{NonZeroU16, NonZeroUsize},
   sync::mpsc,
 };
 
@@ -11,12 +10,11 @@ use miette::{Context, IntoDiagnostic};
 use portable_pty::ChildKiller;
 use tracing::info_span;
 
-pub use self::state::PtyState;
+pub use self::state::{PtyState, PtyStateView};
 use crate::{event::Event, event_sender::EventSender};
 
 pub struct Pty {
   pty_command_rx: mpsc::Receiver<PtyCommand>,
-  parser:         vte::Parser,
   writer:         Box<dyn Write + Send>,
   state:          PtyState,
   event_tx:       EventSender,
@@ -24,16 +22,21 @@ pub struct Pty {
 
 #[derive(Debug)]
 pub struct PtySpawnArguments {
-  pub rows: NonZeroU16,
-  pub cols: NonZeroU16,
+  pub rows:       NonZeroU16,
+  pub cols:       NonZeroU16,
+  pub scrollback: NonZeroUsize,
 }
 
 impl Pty {
   pub fn launch(
     args: PtySpawnArguments,
     event_tx: EventSender,
-  ) -> miette::Result<(PtyHandle, PtyState)> {
-    let PtySpawnArguments { rows, cols } = args;
+  ) -> miette::Result<(PtyHandle, PtyStateView)> {
+    let PtySpawnArguments {
+      rows,
+      cols,
+      scrollback,
+    } = args;
 
     let entered = info_span!("pty_open").entered();
     let pty_system = portable_pty::native_pty_system();
@@ -64,17 +67,14 @@ impl Pty {
 
     let (pty_command_tx, pty_command_rx) = mpsc::channel();
 
-    let parser = vte::Parser::new();
-
     let pty = Pty {
       pty_command_rx,
-      parser,
       writer,
-      state: PtyState::new(rows, cols),
+      state: PtyState::new(rows, cols, scrollback),
       event_tx: event_tx.clone(),
     };
 
-    let pty_state = pty.state.clone();
+    let pty_state_view = pty.state.view();
 
     std::thread::Builder::new()
       .name("pty_state".into())
@@ -107,7 +107,7 @@ impl Pty {
       child_killer,
     };
 
-    Ok((handle, pty_state))
+    Ok((handle, pty_state_view))
   }
 
   fn run(&mut self) -> miette::Result<()> {
@@ -135,10 +135,10 @@ impl Pty {
 
       if !pending_out.is_empty() {
         let _entered = info_span!("parser_advance");
-        self.parser.advance(&mut self.state, &pending_out);
+        self.state.process(&pending_out);
         let _ = self
           .event_tx
-          .try_event(Event::PtySnapshot(self.state.clone()));
+          .try_event(Event::PtySnapshot(self.state.view()));
       }
     }
 
