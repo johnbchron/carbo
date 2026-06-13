@@ -63,6 +63,8 @@ impl TextRun {
     self.chars.push_str(cell.contents());
     self.cell_width += 1;
   }
+
+  fn is_visually_empty(&self) -> bool { self.chars.trim().is_empty() }
 }
 
 impl FrameInput {
@@ -105,11 +107,16 @@ impl FrameInput {
         } else {
           let new_run = TextRun::start_run(cell, (x_cursor, row_idx));
           let completed_run = std::mem::replace(&mut current_run, new_run);
-          persist.runs.push(completed_run);
+
+          if !completed_run.is_visually_empty() {
+            persist.runs.push(completed_run);
+          }
         }
       }
 
-      persist.runs.push(current_run);
+      if !current_run.is_visually_empty() {
+        persist.runs.push(current_run);
+      }
     }
 
     &persist.runs
