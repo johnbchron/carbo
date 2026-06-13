@@ -17,7 +17,7 @@ use crate::{
   event::{Event, WindowingEvent, WinitEventLoopEvent},
   event_sender::EventSender,
   executor::{Command, EventLoopCommand},
-  pty::PtySpawnArguments,
+  pty::{PtySpawnArguments, PtyStateView},
   window_handle::WindowHandle,
 };
 
@@ -259,8 +259,9 @@ impl App {
 
   fn initiate_frame(&self) {
     let pty_state_view = match &self.state.pty {
-      PtyLifecyle::Alive(_, pty_state) => Some(pty_state.clone()),
-      _ => None,
+      PtyLifecyle::NotSpawned => PtyStateView::dummy(),
+      PtyLifecyle::Alive(_, pty_state) => pty_state.clone(),
+      PtyLifecyle::Exited(pty_state) => pty_state.clone(),
     };
     let frame_input = FrameInput {
       pty: pty_state_view,
