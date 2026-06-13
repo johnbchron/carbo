@@ -6,7 +6,7 @@ use winit::{
 };
 
 use crate::{
-  pty::{PtyHandle, PtyState, PtyStateView},
+  pty::{PtyHandle, PtyStateView},
   window_handle::WindowHandle,
 };
 

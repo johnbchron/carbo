@@ -36,13 +36,6 @@ impl FullFrameInput {
 }
 
 impl FullFrameInput {
-  /// Produces a drawn [`vello::Scene`].
-  pub fn draw(&self) -> vello::Scene {
-    let mut scene = vello::Scene::new();
-    self.draw_to_scene(&mut scene);
-    scene
-  }
-
   /// Draws into a [`vello::Scene`].
   pub fn draw_to_scene(&self, scene: &mut vello::Scene) {
     let w = self.physical_size.0 as f64 / self.scale_factor;
