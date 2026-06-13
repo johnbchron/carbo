@@ -10,7 +10,7 @@ use wgpu::{CommandEncoderDescriptor, TextureViewDescriptor};
 use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
-  draw::{FrameInput, FullFrameInput},
+  draw::{FrameInput, FullFrameInput, PersistedDrawingResources},
   event::Event,
   event_sender::EventSender,
   gpu_context::GpuContext,
@@ -53,7 +53,9 @@ pub struct Renderer {
   cached_scene:         vello::Scene,
   /// handle to the window for notifying that we're about to present a frame
   window:               Arc<Window>,
+  /// EventSender just in case.
   _event_tx:            EventSender,
+  persisted_resources:  PersistedDrawingResources,
 }
 
 /// Sent from the [`RendererHandle`] to the [`Renderer`].
@@ -99,6 +101,7 @@ impl Renderer {
       cached_scene: vello::Scene::new(),
       window,
       _event_tx: event_tx.clone(),
+      persisted_resources: PersistedDrawingResources::default(),
     };
 
     let join_handle = std::thread::Builder::new()
@@ -200,7 +203,7 @@ impl Renderer {
     let scene = &mut self.cached_scene;
     info_span!("draw_scene").in_scope(|| {
       scene.reset();
-      full_frame_input.draw_to_scene(scene);
+      full_frame_input.draw_to_scene(scene, &mut self.persisted_resources);
     });
 
     // render the scene to the target texture

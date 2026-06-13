@@ -1,10 +1,6 @@
 mod itemize;
 
-use vello::{
-  kurbo::{Affine, Circle, RoundedRect},
-  peniko::{Brush, Fill, color::palette},
-};
-
+use self::itemize::ItemizerPersistentResources;
 use crate::pty::PtyStateView;
 
 /// A snapshot of [`AppState`](crate::app::AppState) containing all the domain
@@ -39,5 +35,16 @@ impl FullFrameInput {
 
 impl FullFrameInput {
   /// Draws into a [`vello::Scene`].
-  pub fn draw_to_scene(&self, _scene: &mut vello::Scene) {}
+  pub fn draw_to_scene(
+    &self,
+    _scene: &mut vello::Scene,
+    pr: &mut PersistedDrawingResources,
+  ) {
+    let _text_runs = self.input.itemize_text_runs(&mut pr.itemizer_pr);
+  }
+}
+
+#[derive(Default)]
+pub struct PersistedDrawingResources {
+  itemizer_pr: ItemizerPersistentResources,
 }

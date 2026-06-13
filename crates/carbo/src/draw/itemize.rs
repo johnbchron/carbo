@@ -5,10 +5,12 @@ use super::FrameInput;
 /// An estimation of how many cells will be covered by a single run.
 const HEURISTIC_CELLS_PER_RUN: usize = 10;
 
+#[derive(Default)]
 pub struct ItemizerPersistentResources {
   runs: Vec<TextRun>,
 }
 
+#[derive(Debug)]
 pub struct TextRun {
   /// The characters to render in this run.
   chars:        String,
