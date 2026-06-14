@@ -6,6 +6,10 @@ I'm writing a new terminal emulator, for reasons unjustifiable.
 
 Watch the process here.
 
+> Please note that this is a hobby project and a labor of love, not a product.
+It is an exercise in craft, and as such I have no desire to use artificial
+intelligence in the process.
+
 ## Acknowledgments
 
 I've built very few foundational pieces of this application. It's mostly a few robust pieces wired together:
@@ -15,9 +19,3 @@ I've built very few foundational pieces of this application. It's mostly a few r
   - uses `vte`: vt100 parsing and escaping (thank you @alacritty)
 - `wgpu`: rendering & gpu stack (thank you @gfx-rs)
 - `winit`: windowing (thank you @rust-windowing)
-
----
-
-Please note that this is a hobby project and a labor of love, not a product.
-It is an exercise in craft, and as such I have no desire to use artificial
-intelligence in the process.
