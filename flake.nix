@@ -27,6 +27,8 @@
       ];
 
       linux-packages = with pkgs; [
+        pkg-config
+        
         alsa-lib udev
 
         libxkbcommon wayland
@@ -38,6 +40,13 @@
         # vulkan-validation-layers
       ];
 
+      make-pkg-config-path = packages:
+        pkgs.lib.concatStringsSep ":" (
+          pkgs.lib.concatMap
+            (pkg: map (sub: "${pkgs.lib.getDev pkg}/${sub}") [ "lib/pkgconfig" "share/pkgconfig" ])
+            packages
+        );
+
       linux-devshell = pkgs.devshell.mkShell (let
         packages = common-packages ++ linux-packages;
       in {
@@ -45,6 +54,7 @@
         motd = "\n  Welcome to the {2}$(basename $PRJ_ROOT){reset} shell.\n";
         env = [
           { name = "LD_LIBRARY_PATH"; value = pkgs.lib.makeLibraryPath packages; }
+          { name = "PKG_CONFIG_PATH"; value = make-pkg-config-path packages; }
         ];
       });
       darwin-devshell = pkgs.mkShell (let
