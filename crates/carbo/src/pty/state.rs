@@ -42,11 +42,4 @@ impl Debug for PtyStateView {
 
 impl PtyStateView {
   pub fn screen(&self) -> &Screen { &self.screen }
-
-  pub fn dummy() -> Self {
-    let parser = Parser::new(1, 1, 0);
-    PtyStateView {
-      screen: parser.screen().clone(),
-    }
-  }
 }

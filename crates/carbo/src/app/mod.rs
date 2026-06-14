@@ -17,7 +17,7 @@ use crate::{
   event::{Event, WindowingEvent, WinitEventLoopEvent},
   event_sender::EventSender,
   executor::{Command, EventLoopCommand},
-  pty::{PtySpawnArguments, PtyStateView},
+  pty::PtySpawnArguments,
   window_handle::WindowHandle,
 };
 
@@ -258,18 +258,25 @@ impl App {
   }
 
   fn initiate_frame(&self) {
-    let pty_state_view = match &self.state.pty {
-      PtyLifecyle::NotSpawned => PtyStateView::dummy(),
-      PtyLifecyle::Alive(_, pty_state) => pty_state.clone(),
-      PtyLifecyle::Exited(pty_state) => pty_state.clone(),
-    };
-    let frame_input = FrameInput {
-      pty: pty_state_view,
-    };
-
     let Some(window_handle) = self.get_window_handle() else {
       tracing::warn!("attempted to initiate a frame without a window present");
       return;
+    };
+
+    let pty_state_view = match &self.state.pty {
+      PtyLifecyle::NotSpawned => {
+        tracing::warn!(
+          "attempted to initiate a frame without a pty; sending blank frame"
+        );
+        window_handle.initiate_blank_frame();
+        return;
+      }
+      PtyLifecyle::Alive(_, pty_state) | PtyLifecyle::Exited(pty_state) => {
+        pty_state.clone()
+      }
+    };
+    let frame_input = FrameInput {
+      pty: pty_state_view,
     };
 
     window_handle.initiate_frame(frame_input);

@@ -25,6 +25,9 @@ impl WindowHandle {
     self.renderer.send_frame_input(frame_input);
   }
 
+  /// Sends a blank frame to the [`Renderer`](crate::renderer::Renderer).
+  pub fn initiate_blank_frame(&self) { self.renderer.send_blank_frame(); }
+
   /// Handles a resize event.
   pub fn handle_resize(&self, new_size: PhysicalSize<u32>) {
     self.renderer.send_resize(new_size);
