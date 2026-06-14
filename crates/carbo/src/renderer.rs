@@ -60,6 +60,7 @@ pub struct Renderer {
 
 /// Sent from the [`RendererHandle`] to the [`Renderer`].
 enum RendererCommand {
+  BlankFrame,
   FrameInput(FrameInput),
   ChangedScaleFactor(f64),
   Resized(u32, u32),
@@ -137,6 +138,8 @@ impl Renderer {
       let _span = info_span!("command_dispatch").entered();
       // the frame we'll draw
       let mut pending_frame = None;
+      // a blank frame request
+      let mut blank_frame_requested = false;
       // the latest resize seen during the drain; applied once after the loop
       let mut pending_resize = None;
       // the next command to execute
@@ -145,6 +148,10 @@ impl Renderer {
       // coalesce the commands that are waiting
       while let Some(cmd) = command {
         match cmd {
+          // queue a blank frame
+          RendererCommand::BlankFrame => {
+            blank_frame_requested = true;
+          }
           // don't render yet, just store the frame input
           RendererCommand::FrameInput(frame_input) => {
             if pending_frame.is_some() {
@@ -176,18 +183,25 @@ impl Renderer {
         );
       }
 
+      // render a blank frame if requested
+      if blank_frame_requested {
+        let _ = self.render_blank_frame();
+      }
+
       // render when there are no more commands waiting
       if let Some(frame_input) = pending_frame {
-        let _ = self.render_frame(frame_input);
+        let _ = self.render_frame_input(frame_input);
       }
     }
 
     Ok(())
   }
 
-  /// Renders and presents a frame.
-  #[instrument(skip_all)]
-  fn render_frame(&mut self, frame_input: FrameInput) -> Result<(), SkipFrame> {
+  /// Renders a frame input to a frame and presents it.
+  fn render_frame_input(
+    &mut self,
+    frame_input: FrameInput,
+  ) -> Result<(), SkipFrame> {
     let width = self.surface_state.config_width();
     let height = self.surface_state.config_height();
 
@@ -206,6 +220,29 @@ impl Renderer {
       full_frame_input.draw_to_scene(scene, &mut self.persisted_resources);
     });
 
+    // render the scene
+    self.render_current_scene()?;
+
+    Ok(())
+  }
+
+  /// Renders a blank frame and presents it.
+  fn render_blank_frame(&mut self) -> Result<(), SkipFrame> {
+    // reset the scene
+    self.cached_scene.reset();
+
+    // render it
+    self.render_current_scene()?;
+
+    Ok(())
+  }
+
+  /// Renders the currently held scene to a frame and presents it.
+  #[instrument(skip_all)]
+  fn render_current_scene(&mut self) -> Result<(), SkipFrame> {
+    let width = self.surface_state.config_width();
+    let height = self.surface_state.config_height();
+
     // render the scene to the target texture
     info_span!("vello_render").in_scope(|| {
       self
@@ -213,7 +250,7 @@ impl Renderer {
         .render_to_texture(
           self.gpu.device(),
           self.gpu.queue(),
-          scene,
+          &self.cached_scene,
           self.surface_state.get_target_texture_view(),
           &vello::RenderParams {
             base_color: palette::css::BLACK,
@@ -280,6 +317,9 @@ impl RendererHandle {
   pub fn send_frame_input(&self, input: FrameInput) {
     self.command(RendererCommand::FrameInput(input));
   }
+
+  /// Sends a request to the renderer to produce a blank frame.
+  pub fn send_blank_frame(&self) { self.command(RendererCommand::BlankFrame); }
 
   /// Notifies the [`Renderer`] of a resize event, and prompts it to reconfigure
   /// its surface.
