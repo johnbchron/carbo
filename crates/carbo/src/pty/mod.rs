@@ -4,6 +4,7 @@ use std::{
   io::{self, Read, Write},
   num::{NonZeroU16, NonZeroUsize},
   sync::mpsc,
+  time::{Duration, Instant},
 };
 
 use miette::{Context, IntoDiagnostic};
@@ -111,9 +112,19 @@ impl Pty {
   }
 
   fn run(&mut self) -> miette::Result<()> {
-    while let Ok(first) = self.pty_command_rx.recv() {
+    loop {
+      let entered = info_span!("await_command").entered();
+      let Ok(first) = self.pty_command_rx.recv() else {
+        break;
+      };
+      drop(entered);
+
       let entered = info_span!("command_dispatch").entered();
       let mut pending_out = Vec::new();
+      // Coalesce a short burst of commands so a fast-spewing slave doesn't make
+      // us re-parse and re-snapshot for every tiny chunk. We keep waiting (up
+      // to a tiny window) for more, but flush early once the buffer is full.
+      let deadline = Instant::now() + COALESCE_WINDOW;
       let mut cmd = Some(first);
 
       while let Some(command) = cmd {
@@ -129,13 +140,24 @@ impl Pty {
             pending_out.extend_from_slice(&b);
           }
         }
-        cmd = self.pty_command_rx.try_recv().ok();
+
+        if pending_out.len() >= COALESCE_MAX_BYTES {
+          break;
+        }
+        // `recv_timeout` returns immediately while commands are queued, so this
+        // only actually sleeps once we've drained the backlog.
+        cmd = match deadline.checked_duration_since(Instant::now()) {
+          Some(remaining) => self.pty_command_rx.recv_timeout(remaining).ok(),
+          None => break,
+        };
       }
       drop(entered);
 
       if !pending_out.is_empty() {
-        let _entered = info_span!("parser_advance");
+        let entered = info_span!("parser_advance");
         self.state.process(&pending_out);
+        drop(entered);
+        let _entered = info_span!("send_pty_snapshot");
         let _ = self
           .event_tx
           .try_event(Event::PtySnapshot(self.state.view()));
@@ -165,6 +187,13 @@ pub enum PtyCommand {
   /// Bytes sent from the PTY master as output from the process.
   Output(Vec<u8>),
 }
+
+/// How long the pty state thread lets commands accumulate before flushing a
+/// coalesced batch to the parser.
+const COALESCE_WINDOW: Duration = Duration::from_micros(100);
+/// Once a coalesced batch reaches this size we flush it immediately rather than
+/// waiting for the timer; keeps a single parse/snapshot from growing unbounded.
+const COALESCE_MAX_BYTES: usize = 256 * 1024;
 
 fn run_reader(
   mut reader: Box<dyn Read + Send>,
