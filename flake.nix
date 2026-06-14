@@ -31,6 +31,8 @@
         
         alsa-lib udev
 
+        fontconfig freetype
+
         libxkbcommon wayland
         # xorg.libX11 xorg.libXcursor xorg.libXi xorg.libXrandr
 

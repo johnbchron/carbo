@@ -6,6 +6,7 @@ edition = "2024"
 
 [dependencies]
 derive-debug = { version = "0.1" }
+fontique = { version = "0.10" }
 miette = { version = "7.6", features = [ "fancy" ] }
 pollster = { version = "0.4" }
 portable-pty = { version = "0.9" }
