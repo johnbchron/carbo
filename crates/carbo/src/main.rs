@@ -6,6 +6,7 @@ mod draw;
 mod event;
 mod event_sender;
 mod executor;
+mod fonts;
 mod gpu_context;
 mod pty;
 mod renderer;
