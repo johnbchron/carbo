@@ -20,20 +20,27 @@ use tracing_subscriber::{
 };
 
 fn main() -> miette::Result<()> {
-  let perfetto = tracing_perfetto::PerfettoLayer::new(std::sync::Mutex::new(
-    std::fs::File::create("/tmp/carbo.pftrace").unwrap(),
-  ))
-  .with_debug_annotations(true);
-  tracing_subscriber::registry()
+  let subscriber = tracing_subscriber::registry()
     .with(tracing_subscriber::fmt::layer())
     .with(
       EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
         .from_env_lossy(),
-    )
-    .with(perfetto)
-    .try_init()
-    .into_diagnostic()?;
+    );
+
+  cfg_select! {
+    feature = "profile" => {
+      let perfetto = tracing_perfetto::PerfettoLayer::new(std::sync::Mutex::new(
+        std::fs::File::create("/tmp/carbo.pftrace").unwrap(),
+      ))
+      .with_debug_annotations(true);
+
+      subscriber.with(perfetto).try_init().into_diagnostic()?;
+    }
+    _ => {
+      subscriber.try_init().into_diagnostic()?;
+    }
+  }
 
   let app_state =
     crate::app::AppState::build().context("failed to build app state")?;
