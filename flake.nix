@@ -58,6 +58,19 @@
           { name = "LD_LIBRARY_PATH"; value = pkgs.lib.makeLibraryPath packages; }
           { name = "PKG_CONFIG_PATH"; value = make-pkg-config-path packages; }
         ];
+
+        commands = [
+          {
+            name = "run";
+            command = "cargo run -p carbo $@";
+            help = "builds and runs the terminal";
+          }
+          {
+            name = "runp";
+            command = "cargo run -p carbo --release --features profile $@";
+            help = "builds and runs the terminal in release mode with profiling";
+          }
+        ];
       });
       darwin-devshell = pkgs.mkShell (let
         packages = common-packages ++ [ pkgs.apple-sdk ];
