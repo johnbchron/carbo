@@ -5,6 +5,7 @@ use winit::{event_loop::EventLoopProxy, window::Window};
 use crate::{
   event::Event,
   event_sender::EventSender,
+  fonts::FontContext,
   gpu_context::GpuContext,
   pty::{Pty, PtySpawnArguments},
 };
@@ -49,6 +50,8 @@ pub struct Executor {
   command_rx: mpsc::Receiver<Command>,
   /// Sends events to [`App`](crate::app::App).
   event_tx:   EventSender,
+  /// Font context for querying fonts and drawing text.
+  font_ctx:   FontContext,
   /// Sends commands to [`WinitApp`](crate::winit_app::WinitApp).
   winit_tx:   EventLoopProxy<EventLoopCommand>,
 }
@@ -57,11 +60,13 @@ impl Executor {
   pub fn new(
     command_rx: mpsc::Receiver<Command>,
     event_tx: EventSender,
+    font_ctx: FontContext,
     winit_tx: EventLoopProxy<EventLoopCommand>,
   ) -> Self {
     Self {
       command_rx,
       event_tx,
+      font_ctx,
       winit_tx,
     }
   }

@@ -37,6 +37,10 @@ impl App {
       command_tx,
     };
 
+    // build the executor
+    let executor =
+      Executor::new(command_rx, event_tx, app.state.font_ctx.clone(), winit_tx);
+
     // launch the app thread
     std::thread::Builder::new()
       .name("app".into())
@@ -46,9 +50,6 @@ impl App {
       })
       .into_diagnostic()
       .context("failed to launch app thread")?;
-
-    // build the executor
-    let executor = Executor::new(command_rx, event_tx, winit_tx);
 
     // launch the executor thread
     std::thread::Builder::new()
