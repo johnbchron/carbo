@@ -7,13 +7,14 @@ use fontique::{
   Attributes, Collection, CollectionOptions, GenericFamily, QueryFamily,
   QueryFont, QueryStatus, SourceCache, SourceCacheOptions,
 };
+use tracing::instrument;
 
 pub struct FontContext {
   // these both have internal sharing mechanisms but every method they have
   // takes a mutable reference, so we use a mutex to be able to use them
   // immutably.
-  collection:   Mutex<Collection>,
-  source_cache: Mutex<SourceCache>,
+  collection: Mutex<Collection>,
+  cache:      Mutex<SourceCache>,
 }
 
 impl fmt::Debug for FontContext {
@@ -25,21 +26,33 @@ impl fmt::Debug for FontContext {
   }
 }
 
+impl Clone for FontContext {
+  fn clone(&self) -> Self {
+    let (collection, cache) = self.get_lock();
+    Self {
+      collection: Mutex::new(collection.clone()),
+      cache:      Mutex::new(cache.clone()),
+    }
+  }
+}
+
 impl FontContext {
+  #[instrument]
   pub fn new() -> Self {
     let collection = Collection::new(CollectionOptions {
       shared:       true,
-      system_fonts: true,
+      system_fonts: false,
     });
     let source_cache = SourceCache::new(SourceCacheOptions { shared: true });
 
     Self {
-      collection:   Mutex::new(collection),
-      source_cache: Mutex::new(source_cache),
+      collection: Mutex::new(collection),
+      cache:      Mutex::new(source_cache),
     }
   }
 
-  fn get_mut(
+  #[instrument(skip_all)]
+  fn get_lock(
     &self,
   ) -> (MutexGuard<'_, Collection>, MutexGuard<'_, SourceCache>) {
     (
@@ -47,19 +60,17 @@ impl FontContext {
         .collection
         .lock()
         .expect("font collection mutex poisoned"),
-      self
-        .source_cache
-        .lock()
-        .expect("font source cache mutex poisoned"),
+      self.cache.lock().expect("font source cache mutex poisoned"),
     )
   }
 
+  #[instrument(skip_all, fields(family))]
   pub fn resolve_face(
     &self,
     family: Option<&str>,
     attrs: Attributes,
   ) -> Option<QueryFont> {
-    let (mut collection, mut cache) = self.get_mut();
+    let (mut collection, mut cache) = self.get_lock();
 
     // build query
     let mut query = collection.query(&mut cache);
