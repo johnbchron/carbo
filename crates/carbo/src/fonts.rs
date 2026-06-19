@@ -90,4 +90,10 @@ impl FontContext {
 
     found
   }
+
+  #[instrument(skip_all)]
+  pub fn load_system_fonts(&mut self) {
+    let (mut collection, _cache) = self.get_lock();
+    collection.load_system_fonts();
+  }
 }

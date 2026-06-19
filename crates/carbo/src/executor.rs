@@ -19,6 +19,8 @@ pub enum Command {
   EventLoopCommand(EventLoopCommand),
   /// Spawns a PTY handling thread.
   SpawnPty(PtySpawnArguments),
+  /// Loads system fonts into the font context.
+  LoadSystemFonts,
 }
 
 /// Commands forwarded to the [`WinitApp`](crate::winit_app::WinitApp) to be
@@ -98,6 +100,10 @@ impl Executor {
               });
             }
           }
+        }
+        Command::LoadSystemFonts => {
+          self.font_ctx.load_system_fonts();
+          self.event_tx.event(Event::SystemFontsLoaded);
         }
       }
     }

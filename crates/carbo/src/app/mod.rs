@@ -80,6 +80,7 @@ impl App {
             cols:       NonZeroU16::new(80).unwrap(),
             scrollback: NonZeroUsize::new(3000).unwrap(),
           }));
+          self.command(Command::LoadSystemFonts);
         }
 
         // mainline event loop control flow
@@ -206,6 +207,9 @@ impl App {
               exited
             }
           };
+        }
+        Event::SystemFontsLoaded => {
+          tracing::info!("system fonts have been loaded");
         }
         Event::ExitRequested => {
           self.shut_down_app();

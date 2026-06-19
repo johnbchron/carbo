@@ -53,6 +53,8 @@ pub enum Event {
   PtyExited,
   /// The PTY has sent a snapshot of its state.
   PtySnapshot(PtyStateView),
+  /// The system's fonts have been loaded into the font context.
+  SystemFontsLoaded,
   /// The user requested for the application to exit.
   ExitRequested,
   /// Some component of the application has critically failed.
