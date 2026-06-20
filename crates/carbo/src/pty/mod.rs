@@ -50,7 +50,8 @@ impl Pty {
       })
       .map_err(|e| miette::miette!(e))
       .context("failed to open pty")?;
-    let slave_command = portable_pty::CommandBuilder::new("bash");
+    let mut slave_command = portable_pty::CommandBuilder::new("bash");
+    slave_command.args(["-c", "yes"]);
     let child = slave
       .spawn_command(slave_command)
       .map_err(|e| miette::miette!(e))
