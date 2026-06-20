@@ -4,6 +4,7 @@ mod state;
 use std::{
   num::{NonZeroU16, NonZeroUsize},
   sync::mpsc,
+  time::{Duration, Instant},
 };
 
 use miette::IntoDiagnostic;
@@ -20,6 +21,8 @@ use crate::{
   pty::PtySpawnArguments,
   window_handle::WindowHandle,
 };
+
+const MAX_FRAME_DISPATCH_PROXIMITY: Duration = Duration::from_millis(4);
 
 /// The fundamental decision-maker and state-holder.
 ///
@@ -266,6 +269,18 @@ impl App {
       tracing::warn!("attempted to initiate a frame without a window present");
       return;
     };
+
+    // skip frame if dispatched too recently
+    if let Some(last_frame_dispatch) = window_handle.last_frame_dispatch() {
+      let diff = Instant::now() - last_frame_dispatch;
+      if diff < MAX_FRAME_DISPATCH_PROXIMITY {
+        tracing::debug!(
+          "skipping frame dispatch; last frame too recent ({:.02}ms ago)",
+          diff.as_secs_f64() * 1000.0
+        );
+        return;
+      }
+    }
 
     let pty_state_view = match &self.state.pty {
       PtyLifecyle::NotSpawned => {
