@@ -140,9 +140,7 @@ impl App {
         Event::Windowing(box WindowingEvent::Window(_, _window_event)) => {
           // tracing::debug!(window.id = ?w_id, "ignoring unimplemented window
           // event");
-          if let Some(wh) = self.get_window_handle() {
-            wh.request_redraw();
-          }
+          self.request_frame();
         }
         Event::Windowing(box WindowingEvent::Device(_, _device_event)) => {
           // tracing::debug!(device.id = ?d_id, "ignoring unimplemented device
@@ -262,6 +260,12 @@ impl App {
     // shut down winit system
     self.drop_window();
     self.command(Command::EventLoopCommand(EventLoopCommand::ExitEventLoop));
+  }
+
+  fn request_frame(&self) {
+    if let Some(wh) = self.get_window_handle() {
+      wh.request_redraw();
+    }
   }
 
   fn initiate_frame(&self) {
