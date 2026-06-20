@@ -114,13 +114,13 @@ impl Pty {
 
   fn run(&mut self) -> miette::Result<()> {
     loop {
-      let entered = info_span!("await_command").entered();
+      let entered = info_span!("await_pty_command").entered();
       let Ok(first) = self.pty_command_rx.recv() else {
         break;
       };
       drop(entered);
 
-      let entered = info_span!("command_dispatch").entered();
+      let entered = info_span!("pty_command_dispatch").entered();
       let mut pending_out = Vec::new();
       // Coalesce a short burst of commands so a fast-spewing slave doesn't make
       // us re-parse and re-snapshot for every tiny chunk. We keep waiting (up
@@ -204,8 +204,8 @@ fn run_reader(
   let mut buf = [0u8; 64 * 1024];
   loop {
     let result =
-      tracing::info_span!("read_master").in_scope(|| reader.read(&mut buf));
-    let _entered = tracing::info_span!("dispatch_read").entered();
+      tracing::info_span!("read_pty_master").in_scope(|| reader.read(&mut buf));
+    let _entered = tracing::info_span!("dispatch_pty_read").entered();
     match result {
       // an EOF means the child closed the slave side
       Ok(0) => {
