@@ -117,6 +117,7 @@ impl Pty {
   }
 
   fn run(&mut self) -> miette::Result<()> {
+    let mut pending_out = Vec::with_capacity(COALESCE_MAX_BYTES);
     loop {
       let entered = info_span!("await_pty_command").entered();
       let Ok(first) = self.pty_command_rx.recv() else {
@@ -125,11 +126,11 @@ impl Pty {
       drop(entered);
 
       let entered = info_span!("pty_command_dispatch").entered();
-      let mut pending_out = Vec::new();
       // Coalesce a short burst of commands so a fast-spewing slave doesn't make
       // us re-parse and re-snapshot for every tiny chunk. We keep waiting (up
       // to a tiny window) for more, but flush early once the buffer is full.
       let deadline = Instant::now() + COALESCE_WINDOW;
+      pending_out.clear();
       let mut cmd = Some(first);
 
       while let Some(command) = cmd {
