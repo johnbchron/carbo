@@ -1,4 +1,4 @@
-use std::sync::mpsc::{self, SendError};
+use std::sync::mpsc;
 
 use crate::event::Event;
 
@@ -20,7 +20,7 @@ impl EventSender {
   }
 
   /// Attempts to send an [`Event`].
-  pub fn try_event(&self, event: Event) -> Result<(), SendError<Event>> {
-    self.event_tx.send(event)
+  pub fn try_event(&self, event: Event) -> Result<(), ()> {
+    self.event_tx.send(event).map_err(|_| ())
   }
 }
