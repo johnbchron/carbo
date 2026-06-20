@@ -8,6 +8,7 @@ use super::App;
 use crate::{
   event_sender::EventSender,
   executor::{EventLoopCommand, Executor},
+  fonts::FontContext,
   winit_app::WinitApp,
 };
 
@@ -41,7 +42,7 @@ impl App {
 
     // build the executor
     let executor =
-      Executor::new(command_rx, event_tx, app.state.font_ctx.clone(), winit_tx);
+      Executor::new(command_rx, event_tx, FontContext::new(), winit_tx);
 
     // launch the app thread
     std::thread::Builder::new()
