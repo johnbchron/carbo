@@ -1,5 +1,5 @@
 mod launch;
-mod state;
+pub mod state;
 
 use std::{
   num::{NonZeroU16, NonZeroUsize},
