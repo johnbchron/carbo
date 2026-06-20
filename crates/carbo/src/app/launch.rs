@@ -1,6 +1,7 @@
 use std::sync::mpsc;
 
 use miette::{Context, IntoDiagnostic};
+use tracing::{info_span, instrument};
 use winit::event_loop::{ControlFlow, EventLoop};
 
 use super::App;
@@ -13,6 +14,7 @@ use crate::{
 impl App {
   /// Builds the [`App`] and all the things it's connected to, and sets it all
   /// in motion.
+  #[instrument("app_launch", skip_all)]
   pub fn launch(state: crate::app::AppState) -> miette::Result<()> {
     // build the channels
     let (event_tx, event_rx) = mpsc::channel();
@@ -21,8 +23,8 @@ impl App {
 
     // build the winit app
     let mut winit_app = WinitApp::new(event_tx.clone());
-    let window_event_loop = EventLoop::<EventLoopCommand>::with_user_event()
-      .build()
+    let window_event_loop = info_span!("create_winit_event_loop")
+      .in_scope(|| EventLoop::<EventLoopCommand>::with_user_event().build())
       .into_diagnostic()
       .context("failed to build winit event loop")?;
     window_event_loop.set_control_flow(ControlFlow::Wait);
@@ -62,8 +64,8 @@ impl App {
       .context("failed to launch executor thread")?;
 
     // run the winit event loop on the main thread for program lifecycle
-    window_event_loop
-      .run_app(&mut winit_app)
+    info_span!("winit_event_loop")
+      .in_scope(|| window_event_loop.run_app(&mut winit_app))
       .into_diagnostic()
       .context("failed to run winit event loop")?;
 

@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Instant};
 
 use miette::Context;
-use tracing::debug;
+use tracing::{debug, instrument};
 use winit::{
   application::ApplicationHandler,
   dpi::LogicalSize,
@@ -37,6 +37,7 @@ impl WinitApp {
 
   /// Processes a command (user event) sent by the
   /// [`EventLoopProxy`](winit::event_loop::EventLoopProxy).
+  #[instrument("winit_run_command", skip_all, fields(command))]
   fn run_command(
     &mut self,
     event_loop: &ActiveEventLoop,
@@ -44,12 +45,10 @@ impl WinitApp {
   ) {
     match command {
       EventLoopCommand::BuildWindow => {
-        let now = Instant::now();
         let attrs = Window::default_attributes()
           .with_title("carbo")
           .with_inner_size(LogicalSize::new(800, 600));
         let window = Arc::new(event_loop.create_window(attrs).unwrap());
-        debug!("built window in {:.02}ms", now.elapsed().as_millis_f32());
 
         // app loop may already have exited. avoids a potential panic.
         let _ = self.event_tx.try_event(Event::Windowing(Box::new(
@@ -64,14 +63,9 @@ impl WinitApp {
           window.id = ?window.id(),
           "spawning renderer for window"
         );
-        let now = Instant::now();
         let result =
           Renderer::launch(gpu, window.clone(), self.event_tx.clone())
             .context("failed to launch renderer thread");
-        debug!(
-          "launched renderer in {:.2}ms",
-          now.elapsed().as_millis_f32()
-        );
 
         match result {
           Ok(handle) => {

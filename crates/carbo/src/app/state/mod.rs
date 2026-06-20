@@ -22,7 +22,7 @@ pub struct AppState {
 }
 
 impl AppState {
-  #[instrument]
+  #[instrument("build_app_state")]
   pub fn build() -> miette::Result<Self> {
     Ok(AppState {
       gpu:      Arc::new(

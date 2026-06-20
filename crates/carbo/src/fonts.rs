@@ -37,7 +37,7 @@ impl Clone for FontContext {
 }
 
 impl FontContext {
-  #[instrument]
+  #[instrument("new_font_context")]
   pub fn new() -> Self {
     let collection = Collection::new(CollectionOptions {
       shared:       true,
@@ -51,7 +51,7 @@ impl FontContext {
     }
   }
 
-  #[instrument(skip_all)]
+  #[instrument("font_context_get_lock", skip_all)]
   fn get_lock(
     &self,
   ) -> (MutexGuard<'_, Collection>, MutexGuard<'_, SourceCache>) {

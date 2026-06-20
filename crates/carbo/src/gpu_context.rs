@@ -1,4 +1,5 @@
-use tracing::instrument;
+use pollster::FutureExt;
+use tracing::{info_span, instrument};
 use wgpu::{
   Adapter, Backends, Device, DeviceDescriptor, Instance, Queue,
   RequestAdapterOptions,
@@ -16,26 +17,30 @@ pub struct GpuContext {
 
 impl GpuContext {
   /// Constructs and provisions all the resources needed in [`GpuContext`].
-  #[instrument]
+  #[instrument("new_gpu_context")]
   pub fn new() -> miette::Result<Self> {
     // no support for GL
     let instance_descriptor = wgpu::InstanceDescriptor {
       backends: Backends::PRIMARY,
       ..wgpu::InstanceDescriptor::from_env_or_default()
     };
-    let instance = Instance::new(&instance_descriptor);
+    let instance = info_span!("create_instance")
+      .in_scope(|| Instance::new(&instance_descriptor));
 
-    let (adapter, device, queue) = pollster::block_on(async {
-      let adapter = instance
-        .request_adapter(&RequestAdapterOptions::default())
-        .await
-        .expect("no suitable adapter");
-      let (device, queue) = adapter
-        .request_device(&DeviceDescriptor::default())
-        .await
-        .expect("failed to create device");
-      (adapter, device, queue)
-    });
+    let adapter = info_span!("request_adapter")
+      .in_scope(|| {
+        instance
+          .request_adapter(&RequestAdapterOptions::default())
+          .block_on()
+      })
+      .expect("no suitable adapter");
+    let (device, queue) = info_span!("request_device")
+      .in_scope(|| {
+        adapter
+          .request_device(&DeviceDescriptor::default())
+          .block_on()
+      })
+      .expect("failed to create device");
 
     Ok(Self {
       adapter,

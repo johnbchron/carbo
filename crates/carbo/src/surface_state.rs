@@ -27,6 +27,7 @@ pub struct SurfaceState {
 impl SurfaceState {
   /// Constructs a surface with its config, given the [`GpuContext`] and target
   /// [`Window`].
+  #[instrument("new_surface_state", skip_all)]
   pub fn new(
     gpu: Arc<GpuContext>,
     window: Arc<Window>,

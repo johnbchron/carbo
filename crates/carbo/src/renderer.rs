@@ -72,6 +72,7 @@ pub struct SkipFrame;
 impl Renderer {
   /// Builds the [`Renderer`], starts it in its own thread, and returns a
   /// [`RendererHandle`].
+  #[instrument("launch_renderer", skip_all)]
   pub fn launch(
     gpu: Arc<GpuContext>,
     window: Arc<Window>,
@@ -83,14 +84,17 @@ impl Renderer {
     let surface_state = SurfaceState::new(gpu.clone(), window.clone())
       .context("failed to create a surface")?;
 
-    let renderer = vello::Renderer::new(gpu.device(), vello::RendererOptions {
-      use_cpu:              false,
-      antialiasing_support: vello::AaSupport::area_only(),
-      num_init_threads:     None,
-      pipeline_cache:       None,
-    })
-    .into_diagnostic()
-    .context("failed to create vello renderer")?;
+    let renderer = info_span!("create_vello_renderer")
+      .in_scope(|| {
+        vello::Renderer::new(gpu.device(), vello::RendererOptions {
+          use_cpu:              false,
+          antialiasing_support: vello::AaSupport::area_only(),
+          num_init_threads:     None,
+          pipeline_cache:       None,
+        })
+      })
+      .into_diagnostic()
+      .context("failed to create vello renderer")?;
 
     let renderer = Renderer {
       gpu,
