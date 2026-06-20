@@ -20,12 +20,16 @@ impl PtyState {
     }
   }
 
-  pub fn process(&mut self, input: &[u8]) { self.parser.process(input); }
+  pub fn process_input(&mut self, input: &[u8]) { self.parser.process(input); }
 
-  pub fn view(&self) -> PtyStateView {
+  pub fn snapshot(&self) -> PtyStateView {
     PtyStateView {
       screen: self.parser.screen().clone(),
     }
+  }
+
+  pub fn snapshot_recycled(&self, recycled: &mut PtyStateView) {
+    Clone::clone_from(&mut recycled.screen, self.parser.screen());
   }
 }
 
