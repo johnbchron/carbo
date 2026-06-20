@@ -1,6 +1,6 @@
 use std::{
   fmt,
-  sync::{Mutex, MutexGuard},
+  sync::{Arc, Mutex, MutexGuard},
 };
 
 use fontique::{
@@ -14,12 +14,10 @@ use vello::peniko::linebender_resource_handle::FontData;
 
 use crate::app::state::config::FontConfig;
 
+#[derive(Clone)]
 pub struct FontContext {
-  // these both have internal sharing mechanisms but every method they have
-  // takes a mutable reference, so we use a mutex to be able to use them
-  // immutably.
-  collection: Mutex<Collection>,
-  cache:      Mutex<SourceCache>,
+  collection: Arc<Mutex<Collection>>,
+  cache:      Arc<Mutex<SourceCache>>,
 }
 
 #[derive(Debug)]
@@ -47,16 +45,6 @@ impl fmt::Debug for FontContext {
   }
 }
 
-impl Clone for FontContext {
-  fn clone(&self) -> Self {
-    let (collection, cache) = self.get_lock();
-    Self {
-      collection: Mutex::new(collection.clone()),
-      cache:      Mutex::new(cache.clone()),
-    }
-  }
-}
-
 impl FontContext {
   #[instrument("new_font_context")]
   pub fn new() -> Self {
@@ -67,8 +55,8 @@ impl FontContext {
     let source_cache = SourceCache::new(SourceCacheOptions { shared: true });
 
     Self {
-      collection: Mutex::new(collection),
-      cache:      Mutex::new(source_cache),
+      collection: Arc::new(Mutex::new(collection)),
+      cache:      Arc::new(Mutex::new(source_cache)),
     }
   }
 
