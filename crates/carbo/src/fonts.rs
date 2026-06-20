@@ -8,6 +8,7 @@ use fontique::{
   QueryFont, QueryStatus, SourceCache, SourceCacheOptions,
 };
 use tracing::instrument;
+use vello::peniko::linebender_resource_handle::FontData;
 
 pub struct FontContext {
   // these both have internal sharing mechanisms but every method they have
@@ -15,6 +16,27 @@ pub struct FontContext {
   // immutably.
   collection: Mutex<Collection>,
   cache:      Mutex<SourceCache>,
+}
+
+#[derive(Debug)]
+pub struct TerminalFonts {
+  pub family_name: String,
+  pub regular:     FontHandle,
+  pub metrics:     CellMetrics,
+}
+
+#[derive(Debug)]
+pub struct FontHandle {
+  data: FontData,
+}
+
+/// All lengths in logical px.
+#[derive(Clone, Copy, Debug)]
+pub struct CellMetrics {
+  advance:  f32,
+  ascent:   f32,
+  descent:  f32,
+  line_gap: f32,
 }
 
 impl fmt::Debug for FontContext {
