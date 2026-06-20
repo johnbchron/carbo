@@ -159,7 +159,7 @@ impl Renderer {
           // don't render yet, just store the frame input
           RendererCommand::FrameInput(frame_input) => {
             if pending_frame.is_some() {
-              tracing::info!("coalesced frame input");
+              tracing::debug!("coalesced frame input");
             }
             pending_frame = Some(frame_input);
           }
@@ -168,7 +168,7 @@ impl Renderer {
           }
           RendererCommand::Resized(physical_width, physical_height) => {
             if pending_resize.is_some() {
-              tracing::info!("coalesced resize event");
+              tracing::debug!("coalesced resize event");
             }
             pending_resize = Some((physical_width, physical_height));
           }
