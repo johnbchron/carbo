@@ -102,8 +102,20 @@ impl Executor {
           }
         }
         Command::LoadSystemFonts => {
-          self.font_ctx.load_system_fonts();
-          self.event_tx.event(Event::SystemFontsLoaded);
+          let mut font_ctx = self.font_ctx.clone();
+          let event_tx = self.event_tx.clone();
+          let result = std::thread::Builder::new()
+            .name("system_font_loader".to_owned())
+            .spawn(move || {
+              font_ctx.load_system_fonts();
+              event_tx.event(Event::SystemFontsLoaded);
+            });
+          if let Err(e) = result {
+            self.event_tx.event(Event::CriticalFailure {
+              message: "failed to spawn a system_font_loader thread".to_owned(),
+              error:   miette::Report::from_err(e),
+            });
+          }
         }
       }
     }
