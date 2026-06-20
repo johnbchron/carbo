@@ -7,7 +7,7 @@ use tracing::instrument;
 
 use self::config::AppConfig;
 use crate::{
-  fonts::FontContext,
+  fonts::{FontContext, TerminalFonts},
   gpu_context::GpuContext,
   pty::{PtyHandle, PtyStateView},
   window_handle::WindowHandle,
@@ -18,6 +18,7 @@ pub struct AppState {
   pub window:   Option<WindowHandle>,
   pub pty:      PtyLifecyle,
   pub font_ctx: FontContext,
+  pub fonts:    Option<TerminalFonts>,
   pub config:   AppConfig,
 }
 
@@ -31,6 +32,7 @@ impl AppState {
       window:   None,
       pty:      PtyLifecyle::default(),
       font_ctx: FontContext::new(),
+      fonts:    None,
       config:   AppConfig::default(),
     })
   }
