@@ -159,11 +159,8 @@ impl Pty {
       drop(entered);
 
       if !pending_out.is_empty() {
-        let entered = info_span!("parser_advance");
         self.state.process_input(&pending_out);
-        drop(entered);
 
-        let _entered = info_span!("send_pty_snapshot");
         let snapshot = match self.state_recycle_rx.try_recv() {
           Ok(mut recycled_snapshot) => {
             self.state.snapshot_recycled(&mut recycled_snapshot);

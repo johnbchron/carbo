@@ -3,6 +3,7 @@ use std::{
   num::{NonZeroU16, NonZeroUsize},
 };
 
+use tracing::instrument;
 use vt100::{Parser, Screen};
 
 pub struct PtyState {
@@ -20,14 +21,17 @@ impl PtyState {
     }
   }
 
+  #[instrument("process_pty_input", skip_all)]
   pub fn process_input(&mut self, input: &[u8]) { self.parser.process(input); }
 
+  #[instrument("pty_state_snapshot", skip_all)]
   pub fn snapshot(&self) -> PtyStateView {
     PtyStateView {
       screen: self.parser.screen().clone(),
     }
   }
 
+  #[instrument("pty_state_snapshot_recycled", skip_all)]
   pub fn snapshot_recycled(&self, recycled: &mut PtyStateView) {
     Clone::clone_from(&mut recycled.screen, self.parser.screen());
   }
