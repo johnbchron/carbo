@@ -176,20 +176,23 @@ impl App {
             }
           }
         }
-        Event::PtySnapshot(new_pty_state) => match &mut self.state.pty {
-          PtyLifecyle::NotSpawned => unreachable!(
-            "no pty state snapshots should be received before the pty is \
-             spawned"
-          ),
-          PtyLifecyle::Alive(_, pty_state) => {
-            tracing::debug!("received new pty state snapshot");
-            *pty_state = new_pty_state;
+        Event::PtySnapshot(new_pty_state) => {
+          match &mut self.state.pty {
+            PtyLifecyle::NotSpawned => unreachable!(
+              "no pty state snapshots should be received before the pty is \
+               spawned"
+            ),
+            PtyLifecyle::Alive(_, pty_state) => {
+              tracing::debug!("received new pty state snapshot");
+              *pty_state = new_pty_state;
+            }
+            PtyLifecyle::Exited(pty_state) => {
+              tracing::debug!("received pty state snapshot after pty exited");
+              *pty_state = new_pty_state;
+            }
           }
-          PtyLifecyle::Exited(pty_state) => {
-            tracing::debug!("received pty state snapshot after pty exited");
-            *pty_state = new_pty_state;
-          }
-        },
+          self.request_frame();
+        }
         Event::PtyExited => {
           self.state.pty = match std::mem::replace(
             &mut self.state.pty,
@@ -208,6 +211,7 @@ impl App {
               exited
             }
           };
+          self.request_frame();
         }
         Event::SystemFontsLoaded => {
           tracing::info!("system fonts have been loaded");
