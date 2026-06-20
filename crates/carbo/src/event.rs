@@ -6,6 +6,7 @@ use winit::{
 };
 
 use crate::{
+  fonts::TerminalFonts,
   pty::{PtyHandle, PtyStateView},
   window_handle::WindowHandle,
 };
@@ -55,6 +56,8 @@ pub enum Event {
   PtySnapshot(PtyStateView),
   /// The system's fonts have been loaded into the font context.
   SystemFontsLoaded,
+  /// The terminal fonts have been resolved.
+  TerminalFontsResolved(TerminalFonts),
   /// The user requested for the application to exit.
   ExitRequested,
   /// Some component of the application has critically failed.

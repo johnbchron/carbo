@@ -3,6 +3,7 @@ use std::sync::{Arc, mpsc};
 use winit::{event_loop::EventLoopProxy, window::Window};
 
 use crate::{
+  app::state::config::FontConfig,
   event::Event,
   event_sender::EventSender,
   fonts::FontContext,
@@ -21,6 +22,8 @@ pub enum Command {
   SpawnPty(PtySpawnArguments),
   /// Loads system fonts into the font context.
   LoadSystemFonts,
+  /// Resolves the terminal fonts to use.
+  ResolveTerminalFonts(FontConfig),
 }
 
 /// Commands forwarded to the [`WinitApp`](crate::winit_app::WinitApp) to be
@@ -116,6 +119,13 @@ impl Executor {
               error:   miette::Report::from_err(e),
             });
           }
+        }
+        Command::ResolveTerminalFonts(font_config) => {
+          let terminal_fonts =
+            self.font_ctx.resolve_terminal_fonts(&font_config);
+          self
+            .event_tx
+            .event(Event::TerminalFontsResolved(terminal_fonts));
         }
       }
     }

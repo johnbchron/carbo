@@ -216,6 +216,15 @@ impl App {
         }
         Event::SystemFontsLoaded => {
           tracing::info!("system fonts have been loaded");
+          self.command(Command::ResolveTerminalFonts(
+            self.state.config.font_config.clone(),
+          ));
+        }
+        Event::TerminalFontsResolved(terminal_fonts) => {
+          tracing::info!(
+            "terminal fonts have been resolved: {terminal_fonts:?}"
+          );
+          self.state.fonts = Some(terminal_fonts);
         }
         Event::ExitRequested => {
           self.shut_down_app();
