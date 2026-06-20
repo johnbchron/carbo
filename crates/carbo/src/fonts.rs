@@ -12,6 +12,8 @@ use skrifa::{FontRef, MetadataProvider};
 use tracing::instrument;
 use vello::peniko::linebender_resource_handle::FontData;
 
+use crate::app::state::config::FontConfig;
+
 pub struct FontContext {
   // these both have internal sharing mechanisms but every method they have
   // takes a mutable reference, so we use a mutex to be able to use them
@@ -113,13 +115,12 @@ impl FontContext {
   #[instrument(skip_all)]
   pub fn resolve_terminal_fonts(
     &self,
-    family: Option<&str>,
-    size_pt: f32,
+    font_config: &FontConfig,
   ) -> TerminalFonts {
     let regular_attrs =
       Attributes::new(FontWidth::NORMAL, FontStyle::Normal, FontWeight::NORMAL);
     let regular = self
-      .resolve_face(family, regular_attrs)
+      .resolve_face(font_config.font_family.as_deref(), regular_attrs)
       .expect("failed to resolve a regular font");
 
     let family_name = self
@@ -143,7 +144,8 @@ impl FontContext {
     let location = axis_collection.location::<&[(&str, f32)]>(&[]);
 
     // a point is 1/72 of an inch, and standard DPI is 96 PPI.
-    let size = skrifa::instance::Size::new(size_pt / 72.0 * 96.0);
+    let size =
+      skrifa::instance::Size::new(font_config.font_size_pt / 72.0 * 96.0);
 
     let metrics = font_ref.metrics(size, &location);
     let glyph_metrics = font_ref.glyph_metrics(size, &location);
