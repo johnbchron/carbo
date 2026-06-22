@@ -1,3 +1,4 @@
+use smol_str::SmolStr;
 use vt100::Cell;
 
 use super::FrameInput;
@@ -11,13 +12,43 @@ pub struct ItemizerPersistentResources {
 }
 
 #[derive(Debug)]
+pub enum GraphemeCluster {
+  SingleWidth(SmolStr),
+  DoubleWidth(SmolStr),
+}
+
+impl GraphemeCluster {
+  fn from_cell(cell: &Cell) -> Self {
+    let contents = SmolStr::new(cell.contents());
+    match cell.is_wide() {
+      true => GraphemeCluster::DoubleWidth(contents),
+      false => GraphemeCluster::SingleWidth(contents),
+    }
+  }
+
+  fn contents(&self) -> &str {
+    match self {
+      GraphemeCluster::SingleWidth(contents) => contents.as_str(),
+      GraphemeCluster::DoubleWidth(contents) => contents.as_str(),
+    }
+  }
+}
+
+enum ItemizerStateMachine {
+  /// Starting.
+  Start,
+  /// Text run has starting; eating normal characters.
+  TextRunInProgress(TextRun),
+  /// Eating empty cells.
+  EatingEmpty,
+}
+
+#[derive(Debug)]
 pub struct TextRun {
   /// The characters to render in this run.
-  chars:        String,
+  clusters:     Vec<GraphemeCluster>,
   /// The cell coords (x, y) where this run starts.
   start:        (u16, u16),
-  /// The number of cells this run covers.
-  cell_width:   u16,
   /// The foreground color to draw this run with.
   effective_fg: vt100::Color,
   /// The boldness to draw this run with.
@@ -29,14 +60,31 @@ pub struct TextRun {
 }
 
 impl TextRun {
+  /// Starts a new text run. The first cell must be a normal or wide cell, not a
+  /// wide continuation or empty cell.
   fn start_run(first_cell: &Cell, first_cell_pos: (u16, u16)) -> Self {
-    let mut chars = String::with_capacity(HEURISTIC_CELLS_PER_RUN);
-    chars.push_str(first_cell.contents());
+    let mut clusters = Vec::with_capacity(HEURISTIC_CELLS_PER_RUN);
+
+    debug_assert!(
+      first_cell.has_contents(),
+      "first cell in text run doesn't have contents"
+    );
+    debug_assert!(
+      !first_cell.is_wide_continuation(),
+      "first cell in text run is a wide continuation"
+    );
+    match first_cell {
+      c if c.is_wide() => {
+        clusters.push(GraphemeCluster::DoubleWidth(SmolStr::new(c.contents())));
+      }
+      c => {
+        clusters.push(GraphemeCluster::SingleWidth(SmolStr::new(c.contents())));
+      }
+    }
 
     TextRun {
-      chars,
+      clusters,
       start: first_cell_pos,
-      cell_width: 1,
       effective_fg: if first_cell.inverse() {
         first_cell.bgcolor()
       } else {
@@ -61,12 +109,18 @@ impl TextRun {
       && cell.italic() == self.italic
   }
 
-  fn push_to_run(&mut self, cell: &Cell) {
-    self.chars.push_str(cell.contents());
-    self.cell_width += 1;
+  /// Push a grapheme cluster.
+  fn push_cluster(&mut self, cluster: GraphemeCluster) {
+    self.clusters.push(cluster);
   }
 
-  fn is_visually_empty(&self) -> bool { self.chars.trim().is_empty() }
+  /// Returns true if all clusters are whitespace.
+  fn is_visually_empty(&self) -> bool {
+    self
+      .clusters
+      .iter()
+      .any(|c| !c.contents().trim().is_empty())
+  }
 }
 
 impl FrameInput {
@@ -83,42 +137,87 @@ impl FrameInput {
       row_count as usize * (col_count as usize / HEURISTIC_CELLS_PER_RUN);
     persist.runs.reserve(guessed_run_count);
 
+    // iterate through all rows.
     for row_idx in 0..row_count {
-      let first_cell = screen
-        .cell(row_idx, 0)
-        .expect("could not get first grid cell in row during run itemizing");
+      // the state machine runs per row, since rows always break a run
+      let mut state = ItemizerStateMachine::Start;
 
-      // start the run with the first cell in the row
-      let mut current_run = TextRun::start_run(first_cell, (0, row_idx));
-
-      for x_cursor in 1..col_count {
+      // iterate through all cells in the grid
+      for x_cursor in 0..col_count {
         // get the current cell
         let cell = screen
           .cell(row_idx, x_cursor)
           .expect("could not get grid cell during run itemizing");
 
-        // if the previous was a double-wide, just increment width & move on
-        if cell.is_wide_continuation() {
-          current_run.cell_width += 1;
-          continue;
+        // transition the state machine with the current cell
+        state = match state {
+          ItemizerStateMachine::Start => {
+            debug_assert!(
+              !cell.is_wide_continuation(),
+              "row started with wide continuation"
+            );
+            match cell {
+              // begin the run
+              c if c.has_contents() => {
+                let run = TextRun::start_run(cell, (x_cursor, row_idx));
+                ItemizerStateMachine::TextRunInProgress(run)
+              }
+              // eat the empty cell
+              _ => ItemizerStateMachine::EatingEmpty,
+            }
+          }
+          ItemizerStateMachine::TextRunInProgress(mut run) => {
+            match cell {
+              // the cell is empty, so emit the run
+              c if !c.has_contents() => {
+                persist.runs.push(run);
+                ItemizerStateMachine::EatingEmpty
+              }
+              // skip double-wide continuation cells
+              c if c.is_wide_continuation() => {
+                ItemizerStateMachine::TextRunInProgress(run)
+              }
+              // the style matches, so push cluster to the run and continue
+              c if run.should_coalesce(c) => {
+                run.push_cluster(GraphemeCluster::from_cell(c));
+                ItemizerStateMachine::TextRunInProgress(run)
+              }
+              // the style doesn't match, so emit the run and start a new one
+              _ => {
+                persist.runs.push(run);
+                let new_run = TextRun::start_run(cell, (x_cursor, row_idx));
+                ItemizerStateMachine::TextRunInProgress(new_run)
+              }
+            }
+          }
+          ItemizerStateMachine::EatingEmpty => {
+            match cell {
+              // the cell is empty, so continue
+              c if !c.has_contents() => ItemizerStateMachine::EatingEmpty,
+              // the cell is not empty, so start a new run
+              _ => {
+                let new_run = TextRun::start_run(cell, (x_cursor, row_idx));
+                ItemizerStateMachine::TextRunInProgress(new_run)
+              }
+            }
+          }
+        };
+      }
+
+      // end the state machine
+      match state {
+        ItemizerStateMachine::Start => {
+          debug_assert!(false, "the itemizer state machine never transitioned");
         }
-
-        // add the character if it's the same style, otherwise start a new run
-        if current_run.should_coalesce(cell) {
-          current_run.push_to_run(cell);
-        } else {
-          let new_run = TextRun::start_run(cell, (x_cursor, row_idx));
-          let completed_run = std::mem::replace(&mut current_run, new_run);
-
-          if !completed_run.is_visually_empty() {
-            persist.runs.push(completed_run);
+        ItemizerStateMachine::TextRunInProgress(text_run) => {
+          // push the last run if it's not all whitespace
+          if !text_run.is_visually_empty() {
+            persist.runs.push(text_run);
           }
         }
-      }
-
-      if !current_run.is_visually_empty() {
-        persist.runs.push(current_run);
-      }
+        // last cell was empty, no need to do anything
+        ItemizerStateMachine::EatingEmpty => {}
+      };
     }
 
     &persist.runs
