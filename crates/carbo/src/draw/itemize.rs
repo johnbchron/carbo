@@ -80,7 +80,7 @@ impl FrameInput {
     // clear the last runs & allocate if needed
     persist.runs.clear();
     let guessed_run_count =
-      (row_count as usize * col_count as usize) / HEURISTIC_CELLS_PER_RUN;
+      row_count as usize * (col_count as usize / HEURISTIC_CELLS_PER_RUN);
     persist.runs.reserve(guessed_run_count);
 
     for row_idx in 0..row_count {
