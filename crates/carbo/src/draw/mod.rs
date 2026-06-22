@@ -36,11 +36,31 @@ impl FullFrameInput {
 impl FullFrameInput {
   /// Draws into a [`vello::Scene`].
   pub fn draw_to_scene(
-    &self,
-    _scene: &mut vello::Scene,
+    self,
+    scene: &mut vello::Scene,
     pr: &mut PersistedDrawingResources,
   ) {
-    let _text_runs = self.input.itemize_text_runs(&mut pr.itemizer_pr);
+    let FullFrameInput {
+      input,
+      physical_size,
+      scale_factor,
+      frame_count: _frame_count,
+    } = self;
+
+    let _text_runs = input.itemize_text_runs(&mut pr.itemizer_pr);
+
+    let logical_width = physical_size.0 as f64 / scale_factor;
+    let logical_height = physical_size.1 as f64 / scale_factor;
+
+    let zoom = vello::kurbo::Affine::scale(scale_factor);
+    let rect = vello::kurbo::Rect::new(0.0, 0.0, logical_width, logical_height);
+    scene.fill(
+      vello::peniko::Fill::NonZero,
+      zoom,
+      &vello::peniko::Brush::Solid(vello::peniko::color::palette::css::MAGENTA),
+      None,
+      &rect,
+    );
   }
 }
 
