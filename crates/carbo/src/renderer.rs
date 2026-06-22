@@ -178,15 +178,6 @@ impl Renderer {
         command = self.renderer_command_rx.try_recv().ok();
       }
 
-      // apply the latest resize
-      if let Some((physical_width, physical_height)) = pending_resize {
-        self.surface_state.resize_surface(
-          self.gpu.device(),
-          physical_width,
-          physical_height,
-        );
-      }
-
       // render a blank frame if requested
       if blank_frame_requested {
         let _ = self.render_blank_frame();
@@ -195,6 +186,15 @@ impl Renderer {
       // render when there are no more commands waiting
       if let Some(frame_input) = pending_frame {
         let _ = self.render_frame_input(frame_input);
+      }
+
+      // apply the latest resize
+      if let Some((physical_width, physical_height)) = pending_resize {
+        self.surface_state.resize_surface(
+          self.gpu.device(),
+          physical_width,
+          physical_height,
+        );
       }
     }
 
