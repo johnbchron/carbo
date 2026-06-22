@@ -1,12 +1,15 @@
 mod itemize;
 
+use std::sync::Arc;
+
 use self::itemize::ItemizerPersistentResources;
-use crate::pty::PtyStateView;
+use crate::{fonts::TerminalFonts, pty::PtyStateView};
 
 /// A snapshot of [`AppState`](crate::app::AppState) containing all the domain
 /// information needed to draw a frame.
 pub struct FrameInput {
-  pub pty: PtyStateView,
+  pub pty:            PtyStateView,
+  pub terminal_fonts: Arc<TerminalFonts>,
 }
 
 /// A [`FullFrameInput`] plus the rendering info needed to fully draw a frame.

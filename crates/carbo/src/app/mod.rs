@@ -297,6 +297,7 @@ impl App {
       }
     }
 
+    // get the pty state
     let pty_state_view = match &self.state.pty {
       PtyLifecyle::NotSpawned => {
         tracing::warn!(
@@ -309,8 +310,19 @@ impl App {
         pty_state.clone()
       }
     };
+
+    // get the terminal fonts
+    let Some(terminal_fonts) = self.state.fonts.clone() else {
+      tracing::warn!(
+        "attempted to initiate a frame without fonts; sending blank frame"
+      );
+      window_handle.initiate_blank_frame();
+      return;
+    };
+
     let frame_input = FrameInput {
       pty: pty_state_view,
+      terminal_fonts,
     };
 
     window_handle.initiate_frame(frame_input);
