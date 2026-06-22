@@ -133,7 +133,7 @@ impl App {
           _,
           WindowEvent::CloseRequested,
         )) => {
-          debug!("propagating window close request event to app exit");
+          info!("window closed, requesting app exit");
           self.event_loopback.event(Event::ExitRequested);
         }
 
@@ -221,9 +221,6 @@ impl App {
           ));
         }
         Event::TerminalFontsResolved(terminal_fonts) => {
-          tracing::info!(
-            "terminal fonts have been resolved: {terminal_fonts:?}"
-          );
           self.state.fonts = Some(terminal_fonts);
         }
         Event::ExitRequested => {
