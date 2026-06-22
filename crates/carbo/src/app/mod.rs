@@ -3,7 +3,7 @@ pub mod state;
 
 use std::{
   num::{NonZeroU16, NonZeroUsize},
-  sync::mpsc,
+  sync::{Arc, mpsc},
   time::{Duration, Instant},
 };
 
@@ -221,7 +221,7 @@ impl App {
           ));
         }
         Event::TerminalFontsResolved(terminal_fonts) => {
-          self.state.fonts = Some(terminal_fonts);
+          self.state.fonts = Some(Arc::new(terminal_fonts));
         }
         Event::ExitRequested => {
           self.shut_down_app();

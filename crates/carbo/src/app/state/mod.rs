@@ -17,7 +17,7 @@ pub struct AppState {
   pub gpu:    Arc<GpuContext>,
   pub window: Option<WindowHandle>,
   pub pty:    PtyLifecyle,
-  pub fonts:  Option<TerminalFonts>,
+  pub fonts:  Option<Arc<TerminalFonts>>,
   pub config: AppConfig,
 }
 
