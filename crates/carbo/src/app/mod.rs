@@ -8,7 +8,7 @@ use std::{
 };
 
 use miette::IntoDiagnostic;
-use tracing::{debug, info, info_span};
+use tracing::{debug, info, info_span, instrument};
 use winit::{self, dpi::PhysicalSize, event::WindowEvent};
 
 pub use self::state::AppState;
@@ -332,6 +332,7 @@ impl App {
     }
   }
 
+  #[instrument(skip_all)]
   fn initiate_frame(&self) {
     let Some(window_handle) = self.get_window_handle() else {
       tracing::warn!("attempted to initiate a frame without a window present");
@@ -351,6 +352,7 @@ impl App {
     }
 
     // get the pty state
+    let entered = info_span!("duplicate_pty_state").entered();
     let pty_state_view = match &self.state.pty {
       PtyLifecyle::NotSpawned => {
         tracing::warn!(
@@ -363,6 +365,7 @@ impl App {
         pty_state.clone()
       }
     };
+    drop(entered);
 
     // get the terminal fonts
     let Some(terminal_fonts) = self.state.fonts.clone() else {
