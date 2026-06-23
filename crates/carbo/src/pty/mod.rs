@@ -51,8 +51,8 @@ impl Pty {
       })
       .map_err(|e| miette::miette!(e))
       .context("failed to open pty")?;
-    let mut slave_command = portable_pty::CommandBuilder::new("bash");
-    slave_command.args(["-c", "yes"]);
+    let slave_command = portable_pty::CommandBuilder::new("bash");
+    // slave_command.args(["-c", "ls"]);
     let child = slave
       .spawn_command(slave_command)
       .map_err(|e| miette::miette!(e))
@@ -145,6 +145,9 @@ impl Pty {
           PtyCommand::Output(b) => {
             pending_out.extend_from_slice(&b);
           }
+          PtyCommand::Resize { rows, cols } => {
+            self.state.resize(rows, cols);
+          }
         }
 
         if pending_out.len() >= COALESCE_MAX_BYTES {
@@ -193,6 +196,10 @@ impl PtyHandle {
   pub fn recycle_snapshot(&self, snapshot: PtyStateView) {
     let _ = self.state_recycle_tx.send(snapshot);
   }
+
+  pub fn resize(&self, rows: NonZeroU16, cols: NonZeroU16) {
+    let _ = self.pty_command_tx.send(PtyCommand::Resize { rows, cols });
+  }
 }
 
 pub enum PtyCommand {
@@ -200,6 +207,10 @@ pub enum PtyCommand {
   Input(Vec<u8>),
   /// Bytes sent from the PTY master as output from the process.
   Output(Vec<u8>),
+  Resize {
+    rows: NonZeroU16,
+    cols: NonZeroU16,
+  },
 }
 
 /// How long the pty state thread lets commands accumulate before flushing a

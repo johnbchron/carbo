@@ -35,6 +35,11 @@ impl PtyState {
   pub fn snapshot_recycled(&self, recycled: &mut PtyStateView) {
     Clone::clone_from(&mut recycled.screen, self.parser.screen());
   }
+
+  pub fn resize(&mut self, rows: NonZeroU16, cols: NonZeroU16) {
+    tracing::debug!("attempting to set new pty size: {rows} rows, {cols} cols");
+    self.parser.screen_mut().set_size(rows.get(), cols.get());
+  }
 }
 
 #[derive(Clone)]

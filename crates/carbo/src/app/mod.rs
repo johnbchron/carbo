@@ -169,7 +169,8 @@ impl App {
             unreachable!("got a renderer event without a renderer")
           };
           window_state.last_logical_size = (logical_width, logical_height);
-          debug!("got logical resize event from renderer");
+          debug!("got logical resize event from renderer, resizing");
+          self.attempt_pty_resize();
         }
         Event::PtySpawned(new_pty_handle, new_pty_state) => {
           match &mut self.state.pty {
@@ -177,6 +178,7 @@ impl App {
             state @ (PtyLifecyle::NotSpawned | PtyLifecyle::Exited(_)) => {
               tracing::info!("new pty spawned");
               *state = PtyLifecyle::Alive(new_pty_handle, new_pty_state);
+              self.attempt_pty_resize();
             }
             // handle lifecycles shouldn't collide
             PtyLifecyle::Alive(..) => {
@@ -235,6 +237,8 @@ impl App {
         }
         Event::TerminalFontsResolved(terminal_fonts) => {
           self.state.fonts = Some(Arc::new(terminal_fonts));
+          self.attempt_pty_resize();
+          tracing::info!("got fonts");
         }
         Event::ExitRequested => {
           self.shut_down_app();
@@ -259,6 +263,35 @@ impl App {
     }
 
     Ok(())
+  }
+
+  fn attempt_pty_resize(&mut self) {
+    let Some(fonts) = self.state.fonts.as_ref() else {
+      return;
+    };
+    let metrics = fonts.cell_metrics;
+
+    let Some((logical_width, logical_height)) =
+      self.state.window.as_ref().map(|ws| ws.last_logical_size)
+    else {
+      return;
+    };
+
+    let cols = NonZeroU16::new(
+      (logical_width / metrics.cell_width() as f64).floor() as u16,
+    )
+    .unwrap_or(1.try_into().unwrap());
+    let rows = NonZeroU16::new(
+      (logical_height / metrics.cell_height() as f64).floor() as u16,
+    )
+    .unwrap_or(1.try_into().unwrap());
+
+    match &self.state.pty {
+      PtyLifecyle::NotSpawned | PtyLifecyle::Exited(_) => (),
+      PtyLifecyle::Alive(pty_handle, _) => {
+        pty_handle.resize(rows, cols);
+      }
+    }
   }
 
   fn accept_window_handle(

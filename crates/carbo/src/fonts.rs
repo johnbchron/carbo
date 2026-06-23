@@ -36,6 +36,15 @@ pub struct CellMetrics {
   line_gap: f32,
 }
 
+impl CellMetrics {
+  pub fn cell_width(&self) -> f32 { self.advance }
+
+  pub fn cell_height(&self) -> f32 {
+    // descent is negative
+    self.ascent - self.descent + self.line_gap
+  }
+}
+
 impl fmt::Debug for FontContext {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.debug_struct("FontContext")
