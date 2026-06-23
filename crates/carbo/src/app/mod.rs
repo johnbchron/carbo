@@ -12,10 +12,10 @@ use tracing::{debug, info, info_span};
 use winit::{self, dpi::PhysicalSize, event::WindowEvent};
 
 pub use self::state::AppState;
-use self::state::PtyLifecyle;
+use self::state::{PtyLifecyle, WindowState};
 use crate::{
   draw::FrameInput,
-  event::{Event, WindowingEvent, WinitEventLoopEvent},
+  event::{Event, RendererEvent, WindowingEvent, WinitEventLoopEvent},
   event_sender::EventSender,
   executor::{Command, EventLoopCommand},
   pty::PtySpawnArguments,
@@ -155,8 +155,21 @@ impl App {
             EventLoopCommand::SpawnRenderer(window, self.state.gpu.clone()),
           ));
         }
-        Event::RendererSpawned(window_handle) => {
-          self.accept_window_handle(window_handle);
+        Event::RendererSpawned {
+          handle,
+          logical_size,
+        } => {
+          self.accept_window_handle(handle, logical_size);
+        }
+        Event::RendererEvent(RendererEvent::LogicalResize {
+          logical_width,
+          logical_height,
+        }) => {
+          let Some(window_state) = self.state.window.as_mut() else {
+            unreachable!("got a renderer event without a renderer")
+          };
+          window_state.last_logical_size = (logical_width, logical_height);
+          debug!("got logical resize event from renderer");
         }
         Event::PtySpawned(new_pty_handle, new_pty_state) => {
           match &mut self.state.pty {
@@ -248,9 +261,16 @@ impl App {
     Ok(())
   }
 
-  fn accept_window_handle(&mut self, window_handle: WindowHandle) {
-    window_handle.request_redraw();
-    self.state.window = Some(window_handle);
+  fn accept_window_handle(
+    &mut self,
+    handle: WindowHandle,
+    logical_size: (f64, f64),
+  ) {
+    handle.request_redraw();
+    self.state.window = Some(WindowState {
+      handle,
+      last_logical_size: logical_size,
+    });
   }
 
   fn drop_window(&mut self) { self.state.window = None; }
@@ -349,6 +369,6 @@ impl App {
   }
 
   fn get_window_handle(&self) -> Option<&WindowHandle> {
-    self.state.window.as_ref()
+    self.state.window.as_ref().map(|ws| &ws.handle)
   }
 }

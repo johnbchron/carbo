@@ -1,7 +1,7 @@
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
 use miette::Context;
-use tracing::{debug, instrument};
+use tracing::instrument;
 use winit::{
   application::ApplicationHandler,
   dpi::LogicalSize,
@@ -68,10 +68,11 @@ impl WinitApp {
             .context("failed to launch renderer thread");
 
         match result {
-          Ok(handle) => {
-            self
-              .event_tx
-              .event(Event::RendererSpawned(WindowHandle::new(window, handle)));
+          Ok((handle, logical_size)) => {
+            self.event_tx.event(Event::RendererSpawned {
+              handle: WindowHandle::new(window, handle),
+              logical_size,
+            });
           }
           Err(error) => {
             self.event_tx.event(Event::CriticalFailure {

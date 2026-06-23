@@ -37,6 +37,14 @@ pub enum WinitEventLoopEvent {
   Exiting,
 }
 
+#[derive(Debug)]
+pub enum RendererEvent {
+  LogicalResize {
+    logical_width:  f64,
+    logical_height: f64,
+  },
+}
+
 /// An event.
 #[derive(Debug)]
 pub enum Event {
@@ -47,7 +55,12 @@ pub enum Event {
   /// Completion of the
   /// [`WindowingCommand::SpawnRenderer`](crate::executor::WindowingCommand)
   /// command.
-  RendererSpawned(WindowHandle),
+  RendererSpawned {
+    handle:       WindowHandle,
+    logical_size: (f64, f64),
+  },
+  /// An event from the [`Renderer`](crate::renderer::Renderer).
+  RendererEvent(RendererEvent),
   /// Completion of the [`Command::SpawnPty`](crate::executor::Command) command.
   PtySpawned(PtyHandle, PtyStateView),
   /// The PTY has shut down, and the current handle should be dropped.

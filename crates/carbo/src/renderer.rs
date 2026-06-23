@@ -11,7 +11,7 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
   draw::{FrameInput, FullFrameInput, PersistedDrawingResources},
-  event::Event,
+  event::{Event, RendererEvent},
   event_sender::EventSender,
   gpu_context::GpuContext,
   surface_state::SurfaceState,
@@ -54,7 +54,7 @@ pub struct Renderer {
   /// handle to the window for notifying that we're about to present a frame
   window:               Arc<Window>,
   /// EventSender just in case.
-  _event_tx:            EventSender,
+  event_tx:             EventSender,
   persisted_resources:  PersistedDrawingResources,
 }
 
@@ -71,18 +71,20 @@ pub struct SkipFrame;
 
 impl Renderer {
   /// Builds the [`Renderer`], starts it in its own thread, and returns a
-  /// [`RendererHandle`].
+  /// [`RendererHandle`] with the current logical size.
   #[instrument("launch_renderer", skip_all)]
   pub fn launch(
     gpu: Arc<GpuContext>,
     window: Arc<Window>,
     event_tx: EventSender,
-  ) -> miette::Result<RendererHandle> {
+  ) -> miette::Result<(RendererHandle, (f64, f64))> {
     let (renderer_command_tx, renderer_command_rx) = mpsc::channel();
 
     let current_scale_factor = window.scale_factor();
     let surface_state = SurfaceState::new(gpu.clone(), window.clone())
       .context("failed to create a surface")?;
+    let surface_physical_width = surface_state.config_width();
+    let surface_physical_height = surface_state.config_height();
 
     let renderer = info_span!("create_vello_renderer")
       .in_scope(|| {
@@ -105,7 +107,7 @@ impl Renderer {
       renderer_command_rx,
       cached_scene: vello::Scene::new(),
       window,
-      _event_tx: event_tx.clone(),
+      event_tx: event_tx.clone(),
       persisted_resources: PersistedDrawingResources::default(),
     };
 
@@ -132,7 +134,12 @@ impl Renderer {
       event_tx,
     };
 
-    Ok(handle)
+    let logical_size = (
+      surface_physical_width as f64 / current_scale_factor,
+      surface_physical_height as f64 / current_scale_factor,
+    );
+
+    Ok((handle, logical_size))
   }
 
   /// Runs the [`Renderer`] event loop.
@@ -195,6 +202,14 @@ impl Renderer {
           physical_width,
           physical_height,
         );
+        self.event_tx.event(Event::RendererEvent(
+          RendererEvent::LogicalResize {
+            logical_width:  self.surface_state.config_width() as f64
+              / self.current_scale_factor,
+            logical_height: self.surface_state.config_height() as f64
+              / self.current_scale_factor,
+          },
+        ));
       }
     }
 

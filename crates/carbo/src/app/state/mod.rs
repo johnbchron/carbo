@@ -15,7 +15,7 @@ use crate::{
 
 pub struct AppState {
   pub gpu:    Arc<GpuContext>,
-  pub window: Option<WindowHandle>,
+  pub window: Option<WindowState>,
   pub pty:    PtyLifecyle,
   pub fonts:  Option<Arc<TerminalFonts>>,
   pub config: AppConfig,
@@ -34,6 +34,11 @@ impl AppState {
       config: AppConfig::default(),
     })
   }
+}
+
+pub struct WindowState {
+  pub handle:            WindowHandle,
+  pub last_logical_size: (f64, f64),
 }
 
 #[derive(Default)]
