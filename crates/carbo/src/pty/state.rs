@@ -27,13 +27,13 @@ impl PtyState {
   #[instrument("pty_state_snapshot", skip_all)]
   pub fn snapshot(&self) -> PtyStateView {
     PtyStateView {
-      screen: self.parser.screen().clone(),
+      screen: Box::new(self.parser.screen().clone()),
     }
   }
 
   #[instrument("pty_state_snapshot_recycled", skip_all)]
   pub fn snapshot_recycled(&self, recycled: &mut PtyStateView) {
-    Clone::clone_from(&mut recycled.screen, self.parser.screen());
+    Clone::clone_from(recycled.screen.as_mut(), self.parser.screen());
   }
 
   pub fn resize(&mut self, rows: NonZeroU16, cols: NonZeroU16) {
@@ -44,7 +44,7 @@ impl PtyState {
 
 #[derive(Clone)]
 pub struct PtyStateView {
-  screen: Screen,
+  screen: Box<Screen>,
 }
 
 impl Debug for PtyStateView {
