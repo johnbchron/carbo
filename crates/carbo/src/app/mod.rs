@@ -197,10 +197,9 @@ impl App {
               "no pty state snapshots should be received before the pty is \
                spawned"
             ),
-            PtyLifecyle::Alive(pty_handle, pty_state) => {
+            PtyLifecyle::Alive(_, pty_state) => {
               tracing::debug!("received new pty state snapshot");
-              let old_pty_state = std::mem::replace(pty_state, new_pty_state);
-              pty_handle.recycle_snapshot(old_pty_state);
+              *pty_state = new_pty_state;
             }
             PtyLifecyle::Exited(pty_state) => {
               tracing::debug!("received pty state snapshot after pty exited");

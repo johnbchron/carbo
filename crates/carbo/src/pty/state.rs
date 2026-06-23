@@ -1,13 +1,30 @@
 use std::{
   fmt::Debug,
   num::{NonZeroU16, NonZeroUsize},
+  sync::Arc,
 };
 
+use sharded_slab::{Clear, Pool, pool::OwnedRef};
 use tracing::instrument;
 use vt100::{Parser, Screen};
 
+/// Wrapper to allow use with [`sharded_slab::Pool`].
+struct PooledScreen(Screen);
+
+impl Default for PooledScreen {
+  fn default() -> Self { Self(Parser::new(25, 80, 0).screen().clone()) }
+}
+
+// no work needs to be done because we'll [`Clone::clone_into()`] it anyways
+impl Clear for PooledScreen {
+  fn clear(&mut self) {}
+}
+
 pub struct PtyState {
+  /// Holds the vt100 state.
   parser: Parser,
+  /// A pool of screen objects for state snapshots.
+  pool:   Arc<Pool<PooledScreen>>,
 }
 
 impl PtyState {
@@ -18,6 +35,7 @@ impl PtyState {
   ) -> Self {
     Self {
       parser: Parser::new(rows.get(), cols.get(), scrollback.get()),
+      pool:   Arc::new(Pool::new()),
     }
   }
 
@@ -26,14 +44,15 @@ impl PtyState {
 
   #[instrument("pty_state_snapshot", skip_all)]
   pub fn snapshot(&self) -> PtyStateView {
+    let mut slot = self
+      .pool
+      .clone()
+      .create_owned()
+      .expect("pty screen pool overflowed");
+    slot.0.clone_from(self.parser.screen());
     PtyStateView {
-      screen: Box::new(self.parser.screen().clone()),
+      inner: Arc::new(slot.downgrade()),
     }
-  }
-
-  #[instrument("pty_state_snapshot_recycled", skip_all)]
-  pub fn snapshot_recycled(&self, recycled: &mut PtyStateView) {
-    Clone::clone_from(recycled.screen.as_mut(), self.parser.screen());
   }
 
   pub fn resize(&mut self, rows: NonZeroU16, cols: NonZeroU16) {
@@ -44,7 +63,7 @@ impl PtyState {
 
 #[derive(Clone)]
 pub struct PtyStateView {
-  screen: Box<Screen>,
+  inner: Arc<OwnedRef<PooledScreen>>,
 }
 
 impl Debug for PtyStateView {
@@ -54,5 +73,5 @@ impl Debug for PtyStateView {
 }
 
 impl PtyStateView {
-  pub fn screen(&self) -> &Screen { &self.screen }
+  pub fn screen(&self) -> &Screen { &self.inner.0 }
 }

@@ -283,6 +283,7 @@ dependencies = [
  "miette",
  "pollster",
  "portable-pty",
+ "sharded-slab",
  "skrifa 0.43.2",
  "smol_str 0.3.6",
  "tracing",

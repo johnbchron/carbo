@@ -15,11 +15,10 @@ pub use self::state::{PtyState, PtyStateView};
 use crate::{event::Event, event_sender::EventSender};
 
 pub struct Pty {
-  pty_command_rx:   mpsc::Receiver<PtyCommand>,
-  state_recycle_rx: mpsc::Receiver<PtyStateView>,
-  writer:           Box<dyn Write + Send>,
-  state:            PtyState,
-  event_tx:         EventSender,
+  pty_command_rx: mpsc::Receiver<PtyCommand>,
+  writer:         Box<dyn Write + Send>,
+  state:          PtyState,
+  event_tx:       EventSender,
 }
 
 #[derive(Debug)]
@@ -51,8 +50,8 @@ impl Pty {
       })
       .map_err(|e| miette::miette!(e))
       .context("failed to open pty")?;
-    let slave_command = portable_pty::CommandBuilder::new("bash");
-    // slave_command.args(["-c", "ls"]);
+    let mut slave_command = portable_pty::CommandBuilder::new("bash");
+    slave_command.args(["-c", "yes"]);
     let child = slave
       .spawn_command(slave_command)
       .map_err(|e| miette::miette!(e))
@@ -69,11 +68,9 @@ impl Pty {
     drop(entered);
 
     let (pty_command_tx, pty_command_rx) = mpsc::channel();
-    let (state_recycle_tx, state_recycle_rx) = mpsc::channel();
 
     let pty = Pty {
       pty_command_rx,
-      state_recycle_rx,
       writer,
       state: PtyState::new(rows, cols, scrollback),
       event_tx: event_tx.clone(),
@@ -110,7 +107,6 @@ impl Pty {
     let handle = PtyHandle {
       pty_command_tx,
       child_killer,
-      state_recycle_tx,
     };
 
     Ok((handle, pty_state_view))
@@ -165,13 +161,7 @@ impl Pty {
       if !pending_out.is_empty() {
         self.state.process_input(&pending_out);
 
-        let snapshot = match self.state_recycle_rx.try_recv() {
-          Ok(mut recycled_snapshot) => {
-            self.state.snapshot_recycled(&mut recycled_snapshot);
-            recycled_snapshot
-          }
-          Err(_) => self.state.snapshot(),
-        };
+        let snapshot = self.state.snapshot();
         let _ = self.event_tx.try_event(Event::PtySnapshot(snapshot));
       }
     }
@@ -182,19 +172,14 @@ impl Pty {
 
 #[derive(Debug)]
 pub struct PtyHandle {
-  pty_command_tx:   mpsc::Sender<PtyCommand>,
-  child_killer:     Box<dyn ChildKiller + Send>,
-  state_recycle_tx: mpsc::Sender<PtyStateView>,
+  pty_command_tx: mpsc::Sender<PtyCommand>,
+  child_killer:   Box<dyn ChildKiller + Send>,
 }
 
 impl PtyHandle {
   pub fn kill_child(&mut self) -> std::io::Result<()> {
     tracing::info!("killing pty child");
     self.child_killer.kill()
-  }
-
-  pub fn recycle_snapshot(&self, snapshot: PtyStateView) {
-    let _ = self.state_recycle_tx.send(snapshot);
   }
 
   pub fn resize(&self, rows: NonZeroU16, cols: NonZeroU16) {
