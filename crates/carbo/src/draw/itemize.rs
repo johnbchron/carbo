@@ -1,4 +1,5 @@
 use smol_str::SmolStr;
+use tracing::{info_span, instrument};
 use vt100::Cell;
 
 use super::FrameInput;
@@ -124,6 +125,7 @@ impl TextRun {
 }
 
 impl FrameInput {
+  #[instrument(skip_all)]
   pub fn itemize_text_runs<'a>(
     &self,
     persist: &'a mut ItemizerPersistentResources,
@@ -135,10 +137,12 @@ impl FrameInput {
     persist.runs.clear();
     let guessed_run_count =
       row_count as usize * (col_count as usize / HEURISTIC_CELLS_PER_RUN);
-    persist.runs.reserve(guessed_run_count);
+    info_span!("allocate_text_run_storage")
+      .in_scope(|| persist.runs.reserve(guessed_run_count));
 
     // iterate through all rows.
     for row_idx in 0..row_count {
+      let _row_span = info_span!("itemize_row").entered();
       // the state machine runs per row, since rows always break a run
       let mut state = ItemizerStateMachine::Start;
 
