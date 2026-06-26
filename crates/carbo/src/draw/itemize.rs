@@ -13,26 +13,29 @@ pub struct ItemizerPersistentResources {
 }
 
 #[derive(Debug)]
-pub enum GraphemeCluster {
-  SingleWidth(SmolStr),
-  DoubleWidth(SmolStr),
+pub enum ClusterWidth {
+  Single,
+  Double,
+}
+
+#[derive(Debug)]
+pub struct GraphemeCluster {
+  contents: SmolStr,
+  width:    ClusterWidth,
 }
 
 impl GraphemeCluster {
   fn from_cell(cell: &Cell) -> Self {
-    let contents = SmolStr::new(cell.contents());
-    match cell.is_wide() {
-      true => GraphemeCluster::DoubleWidth(contents),
-      false => GraphemeCluster::SingleWidth(contents),
+    GraphemeCluster {
+      contents: SmolStr::new(cell.contents()),
+      width:    match cell.is_wide() {
+        true => ClusterWidth::Double,
+        false => ClusterWidth::Single,
+      },
     }
   }
 
-  fn contents(&self) -> &str {
-    match self {
-      GraphemeCluster::SingleWidth(contents) => contents.as_str(),
-      GraphemeCluster::DoubleWidth(contents) => contents.as_str(),
-    }
-  }
+  fn contents(&self) -> &str { &self.contents }
 }
 
 enum ItemizerStateMachine {
@@ -74,14 +77,13 @@ impl TextRun {
       !first_cell.is_wide_continuation(),
       "first cell in text run is a wide continuation"
     );
-    match first_cell {
-      c if c.is_wide() => {
-        clusters.push(GraphemeCluster::DoubleWidth(SmolStr::new(c.contents())));
-      }
-      c => {
-        clusters.push(GraphemeCluster::SingleWidth(SmolStr::new(c.contents())));
-      }
-    }
+    clusters.push(GraphemeCluster {
+      contents: SmolStr::new(first_cell.contents()),
+      width:    match first_cell.is_wide() {
+        true => ClusterWidth::Double,
+        false => ClusterWidth::Single,
+      },
+    });
 
     TextRun {
       clusters,
