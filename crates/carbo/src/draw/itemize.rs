@@ -1,3 +1,14 @@
+//! Text run itemizing for later shaping.
+//!
+//! Cell backgrounds are not considered for itemizing. The objective of this
+//! step is to identify runs of glyph clusters with the same style as input for
+//! shaping, and record where each glyph cluster should be placed in pty grid
+//! coordinates.
+//!
+//! Some notes from the [`vt100`] crate:
+//! 1. Wide-continuation cells never have contents.
+//! 2. `has_contents() == true` means the cell contains one or more `char`s.
+
 use smol_str::SmolStr;
 use tracing::{info_span, instrument};
 use vt100::Cell;
@@ -10,6 +21,14 @@ const HEURISTIC_CELLS_PER_RUN: usize = 10;
 #[derive(Default)]
 pub struct ItemizerPersistentResources {
   runs: Vec<TextRun>,
+}
+
+impl ItemizerPersistentResources {
+  fn push_run(&mut self, run: TextRun) {
+    if !run.is_visually_empty() {
+      self.runs.push(run);
+    }
+  }
 }
 
 #[derive(Debug)]
@@ -36,12 +55,14 @@ impl GraphemeCluster {
   }
 
   fn contents(&self) -> &str { &self.contents }
+
+  fn width(&self) -> &ClusterWidth { &self.width }
 }
 
 enum ItemizerStateMachine {
   /// Starting.
   Start,
-  /// Text run has starting; eating normal characters.
+  /// Text run has started; eating normal characters.
   TextRunInProgress(TextRun),
   /// Eating empty cells.
   EatingEmpty,
@@ -77,13 +98,7 @@ impl TextRun {
       !first_cell.is_wide_continuation(),
       "first cell in text run is a wide continuation"
     );
-    clusters.push(GraphemeCluster {
-      contents: SmolStr::new(first_cell.contents()),
-      width:    match first_cell.is_wide() {
-        true => ClusterWidth::Double,
-        false => ClusterWidth::Single,
-      },
-    });
+    clusters.push(GraphemeCluster::from_cell(first_cell));
 
     TextRun {
       clusters,
@@ -119,10 +134,7 @@ impl TextRun {
 
   /// Returns true if all clusters are whitespace.
   fn is_visually_empty(&self) -> bool {
-    self
-      .clusters
-      .iter()
-      .any(|c| !c.contents().trim().is_empty())
+    self.clusters.iter().all(|c| c.contents().trim().is_empty())
   }
 }
 
@@ -174,14 +186,14 @@ impl FrameInput {
           }
           ItemizerStateMachine::TextRunInProgress(mut run) => {
             match cell {
-              // the cell is empty, so emit the run
-              c if !c.has_contents() => {
-                persist.runs.push(run);
-                ItemizerStateMachine::EatingEmpty
-              }
               // skip double-wide continuation cells
               c if c.is_wide_continuation() => {
                 ItemizerStateMachine::TextRunInProgress(run)
+              }
+              // the cell is empty, so emit the run
+              c if !c.has_contents() => {
+                persist.push_run(run);
+                ItemizerStateMachine::EatingEmpty
               }
               // the style matches, so push cluster to the run and continue
               c if run.should_coalesce(c) => {
@@ -190,7 +202,7 @@ impl FrameInput {
               }
               // the style doesn't match, so emit the run and start a new one
               _ => {
-                persist.runs.push(run);
+                persist.push_run(run);
                 let new_run = TextRun::start_run(cell, (x_cursor, row_idx));
                 ItemizerStateMachine::TextRunInProgress(new_run)
               }
@@ -213,13 +225,15 @@ impl FrameInput {
       // end the state machine
       match state {
         ItemizerStateMachine::Start => {
-          debug_assert!(false, "the itemizer state machine never transitioned");
+          debug_assert!(
+            false,
+            "the itemizer state machine never transitioned; could indicate \
+             zero-width pty"
+          );
         }
         ItemizerStateMachine::TextRunInProgress(text_run) => {
-          // push the last run if it's not all whitespace
-          if !text_run.is_visually_empty() {
-            persist.runs.push(text_run);
-          }
+          // push the last run
+          persist.push_run(text_run);
         }
         // last cell was empty, no need to do anything
         ItemizerStateMachine::EatingEmpty => {}
