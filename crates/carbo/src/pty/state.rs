@@ -5,7 +5,7 @@ use std::{
 };
 
 use sharded_slab::{Clear, Pool, pool::OwnedRef};
-use tracing::instrument;
+use tracing::{info_span, instrument};
 use vt100::{Parser, Screen};
 
 /// Wrapper to allow use with [`sharded_slab::Pool`].
@@ -17,6 +17,7 @@ impl Default for PooledScreen {
 
 // no work needs to be done because we'll [`Clone::clone_into()`] it anyways
 impl Clear for PooledScreen {
+  #[instrument("clear_pooled_screen", skip_all)]
   fn clear(&mut self) {}
 }
 
@@ -44,12 +45,15 @@ impl PtyState {
 
   #[instrument("pty_state_snapshot", skip_all)]
   pub fn snapshot(&self) -> PtyStateView {
-    let mut slot = self
-      .pool
-      .clone()
-      .create_owned()
-      .expect("pty screen pool overflowed");
-    slot.0.clone_from(self.parser.screen());
+    let mut slot = info_span!("alloc_slot").in_scope(|| {
+      self
+        .pool
+        .clone()
+        .create_owned()
+        .expect("pty screen pool overflowed")
+    });
+    info_span!("clone_from")
+      .in_scope(|| slot.0.clone_from(self.parser.screen()));
     PtyStateView {
       inner: Arc::new(slot.downgrade()),
     }

@@ -9,7 +9,7 @@ use std::{
 
 use miette::{Context, IntoDiagnostic};
 use portable_pty::ChildKiller;
-use tracing::info_span;
+use tracing::{field, info_span};
 
 pub use self::state::{PtyState, PtyStateView};
 use crate::{event::Event, event_sender::EventSender};
@@ -212,9 +212,12 @@ fn run_reader(
 ) {
   let mut buf = [0u8; 64 * 1024];
   loop {
-    let result =
-      tracing::info_span!("read_pty_master").in_scope(|| reader.read(&mut buf));
-    let _entered = tracing::info_span!("dispatch_pty_read").entered();
+    let read_span = info_span!("read_pty_master", len = field::Empty);
+    let entered = read_span.enter();
+    let result = reader.read(&mut buf);
+    drop(entered);
+
+    let _entered = info_span!("dispatch_pty_read").entered();
     match result {
       // an EOF means the child closed the slave side
       Ok(0) => {
@@ -222,9 +225,10 @@ fn run_reader(
         break;
       }
       Ok(n) => {
-        // the pty state thread has exited
+        read_span.record("len", n);
         let result = pty_command_tx.send(PtyCommand::Output(buf[..n].to_vec()));
         if result.is_err() {
+          // the pty state thread has exited
           break;
         }
       }
