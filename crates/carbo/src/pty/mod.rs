@@ -14,6 +14,12 @@ use tracing::{field, info_span};
 pub use self::state::{PtyState, PtyStateView};
 use crate::{event::Event, event_sender::EventSender};
 
+const LIPSUM: &str =
+  "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec sit amet \
+   iaculis turpis, vel convallis ante. Donec commodo suscipit purus, sit amet \
+   tincidunt dui pretium hendrerit. Curabitur elementum mauris eu elementum \
+   malesuada. Maecenas dignissim erat libero, sed ultrices ipsum euismod quis.";
+
 pub struct Pty {
   pty_command_rx: mpsc::Receiver<PtyCommand>,
   writer:         Box<dyn Write + Send>,
@@ -51,7 +57,7 @@ impl Pty {
       .map_err(|e| miette::miette!(e))
       .context("failed to open pty")?;
     let mut slave_command = portable_pty::CommandBuilder::new("bash");
-    slave_command.args(["-c", "yes"]);
+    slave_command.args(["-c", "yes", LIPSUM]);
     let child = slave
       .spawn_command(slave_command)
       .map_err(|e| miette::miette!(e))
