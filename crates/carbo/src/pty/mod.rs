@@ -157,7 +157,7 @@ impl Pty {
         }
         // `recv_timeout` returns immediately while commands are queued, so this
         // only actually sleeps once we've drained the backlog.
-        cmd = match deadline.checked_duration_since(Instant::now()) {
+        cmd = match Instant::now().checked_duration_since(deadline) {
           Some(remaining) => self.pty_command_rx.recv_timeout(remaining).ok(),
           None => break,
         };
