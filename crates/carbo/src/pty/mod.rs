@@ -3,13 +3,18 @@ mod state;
 use std::{
   io::{self, Read, Write},
   num::{NonZeroU16, NonZeroUsize},
-  sync::mpsc,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+    mpsc,
+  },
   time::{Duration, Instant},
 };
 
 use miette::{Context, IntoDiagnostic};
 use portable_pty::ChildKiller;
-use tracing::{field, info_span};
+use sharded_slab::{Clear, Pool, pool::OwnedRef};
+use tracing::{field::Empty, info_span};
 
 pub use self::state::{PtyState, PtyStateView};
 use crate::{event::Event, event_sender::EventSender};
@@ -25,6 +30,7 @@ pub struct Pty {
   writer:         Box<dyn Write + Send>,
   state:          PtyState,
   event_tx:       EventSender,
+  snapshot_req:   Arc<AtomicBool>,
 }
 
 #[derive(Debug)]
@@ -57,7 +63,7 @@ impl Pty {
       .map_err(|e| miette::miette!(e))
       .context("failed to open pty")?;
     let mut slave_command = portable_pty::CommandBuilder::new("bash");
-    slave_command.args(["-c", "yes", LIPSUM]);
+    slave_command.args(["-c", "yes"]);
     let child = slave
       .spawn_command(slave_command)
       .map_err(|e| miette::miette!(e))
@@ -74,12 +80,14 @@ impl Pty {
     drop(entered);
 
     let (pty_command_tx, pty_command_rx) = mpsc::channel();
+    let snapshot_req = Arc::new(AtomicBool::new(true));
 
     let pty = Pty {
       pty_command_rx,
       writer,
       state: PtyState::new(rows, cols, scrollback),
       event_tx: event_tx.clone(),
+      snapshot_req: snapshot_req.clone(),
     };
 
     let pty_state_view = pty.state.snapshot();
@@ -113,62 +121,49 @@ impl Pty {
     let handle = PtyHandle {
       pty_command_tx,
       child_killer,
+      snapshot_req,
     };
 
     Ok((handle, pty_state_view))
   }
 
+  /// Just a simple command dispatcher. In a loop, it accepts commands and runs
+  /// them. Exits when all pty command senders are dropped, or the app is
+  /// dropped.
   fn run(&mut self) -> miette::Result<()> {
-    let mut pending_out = Vec::with_capacity(COALESCE_MAX_BYTES);
     loop {
       let entered = info_span!("await_pty_command").entered();
-      let Ok(first) = self.pty_command_rx.recv() else {
+      let Ok(command) = self.pty_command_rx.recv() else {
         break;
       };
       drop(entered);
 
-      let entered = info_span!("pty_command_dispatch").entered();
-      // Coalesce a short burst of commands so a fast-spewing slave doesn't make
-      // us re-parse and re-snapshot for every tiny chunk. We keep waiting (up
-      // to a tiny window) for more, but flush early once the buffer is full.
-      let deadline = Instant::now() + COALESCE_WINDOW;
-      pending_out.clear();
-      let mut cmd = Some(first);
-
-      while let Some(command) = cmd {
-        match command {
-          PtyCommand::Input(b) => {
-            self
-              .writer
-              .write_all(&b)
-              .into_diagnostic()
-              .context("failed to write to thread")?;
-          }
-          PtyCommand::Output(b) => {
-            pending_out.extend_from_slice(&b);
-          }
-          PtyCommand::Resize { rows, cols } => {
-            self.state.resize(rows, cols);
-          }
+      let _entered = info_span!("pty_command_dispatch").entered();
+      match command {
+        PtyCommand::Input(b) => {
+          self
+            .writer
+            .write_all(&b)
+            .into_diagnostic()
+            .context("failed to write to thread")?;
         }
+        PtyCommand::Output(b) => {
+          self.state.process_input(&b.0);
+        }
+        PtyCommand::Resize { rows, cols } => {
+          self.state.resize(rows, cols);
+        }
+      }
 
-        if pending_out.len() >= COALESCE_MAX_BYTES {
+      // send a snapshot if requested
+      if self.snapshot_req.load(Ordering::Relaxed) {
+        self.snapshot_req.store(false, Ordering::Relaxed);
+        let res = self
+          .event_tx
+          .try_event(Event::PtySnapshot(self.state.snapshot()));
+        if res.is_err() {
           break;
         }
-        // `recv_timeout` returns immediately while commands are queued, so this
-        // only actually sleeps once we've drained the backlog.
-        cmd = match Instant::now().checked_duration_since(deadline) {
-          Some(remaining) => self.pty_command_rx.recv_timeout(remaining).ok(),
-          None => break,
-        };
-      }
-      drop(entered);
-
-      if !pending_out.is_empty() {
-        self.state.process_input(&pending_out);
-
-        let snapshot = self.state.snapshot();
-        let _ = self.event_tx.try_event(Event::PtySnapshot(snapshot));
       }
     }
 
@@ -180,6 +175,7 @@ impl Pty {
 pub struct PtyHandle {
   pty_command_tx: mpsc::Sender<PtyCommand>,
   child_killer:   Box<dyn ChildKiller + Send>,
+  snapshot_req:   Arc<AtomicBool>,
 }
 
 impl PtyHandle {
@@ -191,13 +187,17 @@ impl PtyHandle {
   pub fn resize(&self, rows: NonZeroU16, cols: NonZeroU16) {
     let _ = self.pty_command_tx.send(PtyCommand::Resize { rows, cols });
   }
+
+  pub fn request_snapshot(&self) {
+    self.snapshot_req.store(true, Ordering::Relaxed);
+  }
 }
 
-pub enum PtyCommand {
+enum PtyCommand {
   /// Bytes to send to the PTY slave as input to the process.
   Input(Vec<u8>),
   /// Bytes sent from the PTY master as output from the process.
-  Output(Vec<u8>),
+  Output(OwnedRef<OutputChunk>),
   Resize {
     rows: NonZeroU16,
     cols: NonZeroU16,
@@ -206,46 +206,85 @@ pub enum PtyCommand {
 
 /// How long the pty state thread lets commands accumulate before flushing a
 /// coalesced batch to the parser.
-const COALESCE_WINDOW: Duration = Duration::from_micros(100);
+const COALESCE_WINDOW: Duration = Duration::from_micros(500);
 /// Once a coalesced batch reaches this size we flush it immediately rather than
 /// waiting for the timer; keeps a single parse/snapshot from growing unbounded.
 const COALESCE_MAX_BYTES: usize = 256 * 1024;
 
+/// Reused allocation for PTY output.
+struct OutputChunk(Vec<u8>);
+
+impl Default for OutputChunk {
+  fn default() -> Self { Self(Vec::with_capacity(COALESCE_MAX_BYTES)) }
+}
+
+impl Clear for OutputChunk {
+  fn clear(&mut self) { self.0.clear() }
+}
+
+/// A reader thread that coalesces reads from the PTY output.
 fn run_reader(
   mut reader: Box<dyn Read + Send>,
   pty_command_tx: mpsc::Sender<PtyCommand>,
   event_tx: EventSender,
 ) {
-  let mut buf = [0u8; 64 * 1024];
-  loop {
-    let read_span = info_span!("read_pty_master", len = field::Empty);
-    let entered = read_span.enter();
-    let result = reader.read(&mut buf);
-    drop(entered);
+  // make a pool for reusing the output allocations
+  let pool: Arc<Pool<OutputChunk>> = Arc::new(Pool::new());
 
-    let _entered = info_span!("dispatch_pty_read").entered();
-    match result {
-      // an EOF means the child closed the slave side
-      Ok(0) => {
-        tracing::debug!("pty reader reached EOF");
-        break;
-      }
-      Ok(n) => {
-        read_span.record("len", n);
-        let result = pty_command_tx.send(PtyCommand::Output(buf[..n].to_vec()));
-        if result.is_err() {
-          // the pty state thread has exited
-          break;
+  'outer: loop {
+    // get a new output allocation
+    let mut buf = pool.clone().create_owned().unwrap();
+    // set the deadline. only respected if we're behind on sending.
+    let deadline = Instant::now() + COALESCE_WINDOW;
+
+    // read in a loop until we exceed the deadline or data limit
+    let entered = info_span!("coalesce_loop", chunk_len = Empty).entered();
+    'coalesce: loop {
+      // mark where the data ends and add more space to the chunk
+      let start = buf.0.len();
+      buf.0.resize((start + 64 * 1024).min(COALESCE_MAX_BYTES), 0);
+
+      // read into the new empty space
+      let result = info_span!("read_pty_master")
+        .in_scope(|| reader.read(&mut buf.0[start..]));
+
+      // bail if the read went wrong
+      let n = match result {
+        Ok(0) => {
+          tracing::debug!("pty reader reached EOF");
+          break 'outer;
         }
-      }
-      // a signal interrupted the read; try again
-      Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-      // sometimes an IO error just means a normal exit
-      Err(e) => {
-        tracing::debug!(error = ?e, "pty reader received IO error; exiting");
-        break;
+        Ok(n) => n,
+        // a signal interrupted the read; try again
+        Err(e) if e.kind() == io::ErrorKind::Interrupted => 0,
+        Err(e) => {
+          tracing::error!(error = ?e, "pty reader received IO error; exiting");
+          break 'outer;
+        }
+      };
+
+      // trim down to the data region
+      buf.0.truncate(start + n);
+
+      // quit if needed
+      let over_size = buf.0.len() >= COALESCE_MAX_BYTES;
+      let over_time = deadline.checked_duration_since(Instant::now()).is_none();
+      if over_size || over_time {
+        break 'coalesce;
       }
     }
+    entered.record("chunk_len", buf.0.len());
+    drop(entered);
+
+    // send the chunk off
+    let chunk_buf =
+      std::mem::replace(&mut buf, pool.clone().create_owned().unwrap());
+    if pty_command_tx
+      .send(PtyCommand::Output(chunk_buf.downgrade()))
+      .is_err()
+    {
+      break;
+    };
   }
 
   let _ = event_tx.try_event(Event::PtyExited);

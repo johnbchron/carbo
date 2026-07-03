@@ -40,7 +40,7 @@ impl PtyState {
     }
   }
 
-  #[instrument("process_pty_input", skip_all)]
+  #[instrument("process_pty_input", skip_all, fields(input_len = input.len()))]
   pub fn process_input(&mut self, input: &[u8]) { self.parser.process(input); }
 
   #[instrument("pty_state_snapshot", skip_all)]

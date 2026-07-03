@@ -18,7 +18,7 @@ use crate::{
   event::{Event, RendererEvent, WindowingEvent, WinitEventLoopEvent},
   event_sender::EventSender,
   executor::{Command, EventLoopCommand},
-  pty::PtySpawnArguments,
+  pty::{PtyHandle, PtySpawnArguments},
   window_handle::WindowHandle,
 };
 
@@ -191,23 +191,20 @@ impl App {
             }
           }
         }
-        Event::PtySnapshot(new_pty_state) => {
-          match &mut self.state.pty {
-            PtyLifecyle::NotSpawned => unreachable!(
-              "no pty state snapshots should be received before the pty is \
-               spawned"
-            ),
-            PtyLifecyle::Alive(_, pty_state) => {
-              tracing::debug!("received new pty state snapshot");
-              *pty_state = new_pty_state;
-            }
-            PtyLifecyle::Exited(pty_state) => {
-              tracing::debug!("received pty state snapshot after pty exited");
-              *pty_state = new_pty_state;
-            }
+        Event::PtySnapshot(new_pty_state) => match &mut self.state.pty {
+          PtyLifecyle::NotSpawned => unreachable!(
+            "no pty state snapshots should be received before the pty is \
+             spawned"
+          ),
+          PtyLifecyle::Alive(_, pty_state) => {
+            tracing::debug!("received new pty state snapshot");
+            *pty_state = new_pty_state;
           }
-          self.request_frame();
-        }
+          PtyLifecyle::Exited(pty_state) => {
+            tracing::debug!("received pty state snapshot after pty exited");
+            *pty_state = new_pty_state;
+          }
+        },
         Event::PtyExited => {
           self.state.pty = match std::mem::replace(
             &mut self.state.pty,
@@ -226,7 +223,6 @@ impl App {
               exited
             }
           };
-          self.request_frame();
         }
         Event::SystemFontsLoaded => {
           tracing::info!("system fonts have been loaded");
@@ -325,9 +321,16 @@ impl App {
     self.command(Command::EventLoopCommand(EventLoopCommand::ExitEventLoop));
   }
 
+  #[instrument(skip_all)]
   fn request_frame(&self) {
-    if let Some(wh) = self.get_window_handle() {
-      wh.request_redraw();
+    let Some(window_handle) = self.get_window_handle() else {
+      return;
+    };
+
+    window_handle.request_redraw();
+
+    if let Some(pty_handle) = self.get_pty_handle() {
+      pty_handle.request_snapshot();
     }
   }
 
@@ -405,5 +408,12 @@ impl App {
 
   fn get_window_handle(&self) -> Option<&WindowHandle> {
     self.state.window.as_ref().map(|ws| &ws.handle)
+  }
+
+  fn get_pty_handle(&self) -> Option<&PtyHandle> {
+    match &self.state.pty {
+      PtyLifecyle::Alive(pty_handle, _) => Some(pty_handle),
+      _ => None,
+    }
   }
 }
