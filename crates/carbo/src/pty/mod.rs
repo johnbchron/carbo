@@ -79,7 +79,7 @@ impl Pty {
       .context("failed to take PTY writer from master side")?;
     drop(entered);
 
-    let (pty_command_tx, pty_command_rx) = mpsc::channel();
+    let (pty_command_tx, pty_command_rx) = mpsc::sync_channel(32);
     let snapshot_req = Arc::new(AtomicBool::new(true));
 
     let pty = Pty {
@@ -173,7 +173,7 @@ impl Pty {
 
 #[derive(Debug)]
 pub struct PtyHandle {
-  pty_command_tx: mpsc::Sender<PtyCommand>,
+  pty_command_tx: mpsc::SyncSender<PtyCommand>,
   child_killer:   Box<dyn ChildKiller + Send>,
   snapshot_req:   Arc<AtomicBool>,
 }
@@ -225,7 +225,7 @@ impl Clear for OutputChunk {
 /// A reader thread that coalesces reads from the PTY output.
 fn run_reader(
   mut reader: Box<dyn Read + Send>,
-  pty_command_tx: mpsc::Sender<PtyCommand>,
+  pty_command_tx: mpsc::SyncSender<PtyCommand>,
   event_tx: EventSender,
 ) {
   // make a pool for reusing the output allocations
@@ -279,10 +279,10 @@ fn run_reader(
     // send the chunk off
     let chunk_buf =
       std::mem::replace(&mut buf, pool.clone().create_owned().unwrap());
-    if pty_command_tx
-      .send(PtyCommand::Output(chunk_buf.downgrade()))
-      .is_err()
-    {
+    let res = info_span!("send_pty_output_chunk").in_scope(|| {
+      pty_command_tx.send(PtyCommand::Output(chunk_buf.downgrade()))
+    });
+    if res.is_err() {
       break;
     };
   }
